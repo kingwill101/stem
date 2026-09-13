@@ -1,8 +1,8 @@
 # stem_flutter
 
 Use **the same Stem application and task APIs in Flutter**. This package adds
-Flutter initialization and conservative local-worker defaults—not another task
-runtime, worker protocol, or monitoring API.
+Flutter initialization, conservative local-worker defaults, and optional
+workflow-host lifecycle/widgets—not another execution engine or status model.
 
 `StemFlutter.createApp()` returns an actual `StemApp`. Modules, task definitions,
 typed arguments/results, registration, Canvas, middleware, routing, and worker
@@ -10,8 +10,54 @@ execution all remain core Stem features.
 
 For durable local storage, use `stem_flutter_sqlite`.
 
-Version 0.3.1 requires Stem `>=0.4.2 <0.5.0` for bounded execution and safe
-lifecycle cleanup. It replaces the removed Flutter-specific runtime APIs.
+## Workflow hosts
+
+`WorkflowHostController` is the Flutter binding for the core workflow host. It
+can own a host created by an async factory or borrow a host supplied by the
+application:
+
+```dart
+final controller = WorkflowHostController(
+  factory: () => WorkflowHost.inMemory(workflows: workflows),
+);
+
+WorkflowHostScope(
+  controller: controller,
+  loadingBuilder: (_) => const CircularProgressIndicator(),
+  errorBuilder: (_, error, stack) => Text('$error'),
+  child: const MyWorkflowScreen(),
+);
+```
+
+The controller does not reconfigure its host. Supply appropriate mobile worker
+and storage configuration in the factory.
+
+`WorkflowHostScope.of(context)` exposes the controller; its `host` is available
+after startup. Startup and transitions to the foreground coalesce calls to the
+core `WorkflowHost.recover(limit: 100)`. The latest core recovery report is
+available as `controller.recoveryReport`, and failures are exposed through
+`error`/`errorStack` and `onError`. Pausing does not stop or cancel workflows,
+and this package provides no background execution guarantee.
+
+Recovery re-enqueues registered runnable runs whose delivery may be missing or
+whose lease expired. It does not force-resume event waits or sleeps; those stay
+under the existing runtime's scheduling. Per-run failures are available in the
+report's `errors` map even when the scan itself succeeds.
+
+The scope borrows its controller. Removing the widget detaches listeners; the
+application must explicitly close/dispose the controller it created.
+
+Call `await controller.close()` during awaited application teardown. A
+factory-created host is closed; a supplied host is borrowed and is never
+closed. Calling `dispose()` also initiates close, reporting teardown failures
+through `onError` (or `developer.log`).
+
+For snapshot UI, `HostedRunBuilder<R>` passes the existing `WorkflowRunView`
+from `HostedRun.watch()` directly to its builder. It does not decode the result;
+use `run.result` when a typed terminal value is needed.
+
+The 0.4 release series requires Stem `>=0.5.0 <0.6.0`. The older Flutter-specific
+task runtime APIs remain replaced by the ordinary core application API.
 
 ## Getting started
 

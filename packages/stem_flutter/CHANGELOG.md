@@ -2,7 +2,10 @@
 
 ## 0.4.0
 
-- Require Stem `>=0.5.0 <0.6.0` for the coordinated core release.
+- Require Stem `>=0.5.0 <1.0.0`, allowing later pre-1.0 releases.
+- Added Flutter bindings for core `WorkflowHost` and `HostedRun`, including
+  lifecycle-aware foreground recovery, ownership-safe controller teardown, and
+  snapshot-only `HostedRunBuilder`.
 
 ## 0.3.1
 
