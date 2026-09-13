@@ -2,6 +2,9 @@
 
 ## 0.3.0
 
+- Preserve error data and timestamps for every terminal run. Use explicit topic
+  prefixes for cleanup, including terminal failures and caller-supplied IDs
+  containing `:wf:`. Reject malformed journal writes and empty journal fences.
 - Add separate Lua-backed workflow journals with atomic execution/revision CAS,
   checkpoint ordering, compensation ordering, and atomic journal-aware rewind.
 - Add Lua-atomic first-terminal-wins completion/cancellation and prevent ordinary

@@ -2,6 +2,9 @@
 
 ## 0.5.0
 
+- Validate journal write arguments consistently across bundled stores. Malformed
+  revisions, blank identities, and invalid checkpoint combinations throw
+  `ArgumentError` rather than being retried as optimistic-concurrency conflicts.
 - Consolidate due-run resumption in the runtime. `StemWorkflowApp.resumeDueRuns`
   now enqueues continuations; manual drivers can opt out through the runtime's
   `enqueue: false` option. Share lifecycle bookkeeping and checkpoint writes,

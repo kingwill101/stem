@@ -253,7 +253,10 @@ class SqliteWorkflowStore
     required String executionId,
     WorkflowJournalCheckpoint? checkpoint,
   }) async {
-    if (entry.revision != expectedRevision + 1) return false;
+    entry.validateWrite(
+      expectedRevision: expectedRevision,
+      checkpoint: checkpoint,
+    );
     return _connections.runInTransaction((ctx) async {
       final status = entry.kind == WorkflowJournalKind.step
           ? WorkflowStatus.running.name

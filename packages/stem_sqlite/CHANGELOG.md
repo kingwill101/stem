@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Use shared journal argument validation so malformed writes raise `ArgumentError`
+  before any persisted-state mutation.
 - Add a separate workflow journal table and atomic revision/execution checks
   coupling checkpoint success with ordered compensation registration. Verify
   retry and cleanup progress across database reopen and schema upgrades.

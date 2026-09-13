@@ -58,6 +58,74 @@ void runWorkflowJournalContractTests({
       );
     }
 
+    void invalidWrite(
+      String description,
+      WorkflowJournalEntry Function() build, {
+      int expectedRevision = 0,
+      WorkflowJournalCheckpoint? checkpoint,
+    }) {
+      test('malformed write: $description', () async {
+        final write = build();
+        final before = (await store.get(id))!.toJson();
+        await expectLater(
+          journal.commitJournal(
+            write,
+            expectedRevision: expectedRevision,
+            executionId: executionId,
+            checkpoint: checkpoint,
+          ),
+          throwsA(
+            isA<ArgumentError>().having(
+              (error) => error.message,
+              'message',
+              'Invalid workflow journal write.',
+            ),
+          ),
+        );
+        expect((await store.get(id))!.toJson(), before);
+        expect(await store.listSteps(id), isEmpty);
+        expect(await journal.listCompensations(id), isEmpty);
+        expect(
+          (await journal.readJournal(id, write.kind, write.name))!.entry,
+          isNull,
+        );
+        if (write.runId != id) expect(await store.get(write.runId), isNull);
+      });
+    }
+
+    invalidWrite(
+      'negative expected revision',
+      () => entry('step', 0),
+      expectedRevision: -1,
+    );
+    invalidWrite('inconsistent next revision', () => entry('step', 2));
+    for (final name in ['', ' \t']) {
+      invalidWrite('blank name ${name.length}', () => entry(name, 1));
+    }
+    for (final runId in ['', ' \t']) {
+      invalidWrite(
+        'blank run ID ${runId.length}',
+        () => WorkflowJournalEntry(
+          runId: runId,
+          kind: WorkflowJournalKind.step,
+          name: 'step',
+          revision: 1,
+          data: const {},
+        ),
+      );
+    }
+    invalidWrite(
+      'checkpoint on a compensation record',
+      () => WorkflowJournalEntry(
+        runId: id,
+        kind: WorkflowJournalKind.compensation,
+        name: 'cleanup',
+        revision: 1,
+        data: const {},
+      ),
+      checkpoint: const WorkflowJournalCheckpoint(value: 'must not appear'),
+    );
+
     test('journal-only CAS never appears as an ordinary checkpoint', () async {
       expect(
         await journal.commitJournal(
@@ -85,6 +153,37 @@ void runWorkflowJournalContractTests({
           'step',
         ))!.entry!.revision,
         1,
+      );
+    });
+
+    test('an empty token cannot write an unclaimed run', () async {
+      final unclaimed = await store.createRun(
+        workflow: 'journal.unclaimed',
+        params: const {},
+      );
+      expect(
+        await journal.commitJournal(
+          WorkflowJournalEntry(
+            runId: unclaimed,
+            kind: WorkflowJournalKind.step,
+            name: 'step',
+            revision: 1,
+            data: const {'version': 1, 'state': 'completed'},
+          ),
+          expectedRevision: 0,
+          executionId: '',
+          checkpoint: const WorkflowJournalCheckpoint(value: 'unowned'),
+        ),
+        isFalse,
+      );
+      expect(await store.listSteps(unclaimed), isEmpty);
+      expect(
+        (await journal.readJournal(
+          unclaimed,
+          WorkflowJournalKind.step,
+          'step',
+        ))!.entry,
+        isNull,
       );
     });
 
@@ -191,8 +290,10 @@ void runWorkflowJournalContractTests({
     test(
       'rewind discards removed-step journals and fences old cleanup',
       () async {
-        await save('first', 1);
+        const retained = "first'checkpoint";
+        await save(retained, 1);
         await save('second', 2);
+        await save('third', 3);
         await fenced.markFailedForExecution(
           id,
           executionId: executionId,
@@ -202,16 +303,21 @@ void runWorkflowJournalContractTests({
         final old = (await journal.listCompensations(id)).first;
         await store.rewindToStep(id, 'second');
         expect((await journal.listCompensations(id)).map((e) => e.name), [
-          'first',
+          retained,
         ]);
-        expect(
-          (await journal.readJournal(
-            id,
-            WorkflowJournalKind.step,
-            'second',
-          ))!.entry,
-          isNull,
-        );
+        for (final removed in ['second', 'third']) {
+          expect(
+            (await journal.readJournal(
+              id,
+              WorkflowJournalKind.step,
+              removed,
+            ))!.entry,
+            isNull,
+          );
+        }
+        expect((await store.listSteps(id)).map((step) => step.name), [
+          retained,
+        ]);
         expect(
           await journal.commitJournal(
             WorkflowJournalEntry(
@@ -225,6 +331,17 @@ void runWorkflowJournalContractTests({
             executionId: executionId,
           ),
           isFalse,
+        );
+        await store.rewindToStep(id, retained);
+        expect(await journal.listCompensations(id), isEmpty);
+        expect(await store.listSteps(id), isEmpty);
+        expect(
+          (await journal.readJournal(
+            id,
+            WorkflowJournalKind.step,
+            retained,
+          ))!.entry,
+          isNull,
         );
       },
     );

@@ -180,6 +180,24 @@ final class WorkflowJournalEntry {
 
   /// Successful completion order, assigned atomically for compensation records.
   final int? position;
+
+  /// Validates the structural arguments of a journal write.
+  ///
+  /// Stores call this before reading or mutating persisted state. Malformed
+  /// writes throw [ArgumentError]; a valid write rejected by a stored revision
+  /// or execution fence is a conflict instead.
+  void validateWrite({
+    required int expectedRevision,
+    WorkflowJournalCheckpoint? checkpoint,
+  }) {
+    if (expectedRevision < 0 ||
+        revision != expectedRevision + 1 ||
+        runId.trim().isEmpty ||
+        name.trim().isEmpty ||
+        (checkpoint != null && kind != WorkflowJournalKind.step)) {
+      throw ArgumentError('Invalid workflow journal write.');
+    }
+  }
 }
 
 /// Run identity and one journal record read for an optimistic state transition.
@@ -259,6 +277,10 @@ abstract interface class WorkflowJournalStore {
   Future<List<WorkflowJournalEntry>> listCompensations(String runId);
 
   /// Commits a revision and optional checkpoint, returning false on conflict.
+  ///
+  /// Throws [ArgumentError] for invalid write arguments, as defined by
+  /// [WorkflowJournalEntry.validateWrite]. These are caller errors, not
+  /// optimistic-concurrency conflicts, and must not be retried as contention.
   ///
   /// [WorkflowJournalEntry.revision] must equal [expectedRevision] + 1.
   /// Missing records have

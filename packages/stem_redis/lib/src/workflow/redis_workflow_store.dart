@@ -303,7 +303,7 @@ local failedStatus = ARGV[11]
 local status = redis.call('HGET', runKey, 'status')
 if (kind == 'step' and status ~= runningStatus) or
    (kind == 'compensation' and status ~= failedStatus) then return 0 end
-if redis.call('HGET', runKey, 'execution_id') ~= executionId then return 0 end
+if executionId == '' or redis.call('HGET', runKey, 'execution_id') ~= executionId then return 0 end
 local raw = redis.call('HGET', journalKey, name)
 local currentRevision = 0
 if raw then currentRevision = tonumber(cjson.decode(raw)['revision']) or 0 end
@@ -514,6 +514,7 @@ return 1
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
 local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
 local executionId = ARGV[1]
 local failedStatus = ARGV[2]
 local status = redis.call('HGET', runKey, 'status')
@@ -533,6 +534,10 @@ if watcher then
   if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], runId) end
 end
 redis.call('ZREM', dueKey, runId)
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+if waitTopic and waitTopic ~= '' then
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
+end
 redis.call('HSET', runKey, 'status', failedStatus, 'last_error', ARGV[6],
   'owner_id', '', 'lease_expires_at', '', 'resume_at', '', 'wait_topic', '',
   'updated_at', ARGV[7])
@@ -543,6 +548,7 @@ return 0
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
 local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
 local runId = ARGV[1]
 local runningStatus = ARGV[2]
 local suspendedStatus = ARGV[3]
@@ -559,8 +565,7 @@ if watcher then
 end
 redis.call('ZREM', dueKey, runId)
 if waitTopic and waitTopic ~= '' then
-  local prefix = string.match(runKey, '^(.*:wf:)')
-  redis.call('SREM', prefix .. 'topic:' .. waitTopic, runId)
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
 end
 redis.call('HSET', runKey, 'status', terminalStatus, 'result', ARGV[5],
   'suspension_data', '', 'wait_topic', '', 'resume_at', '',
@@ -572,6 +577,7 @@ return 1
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
 local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
 local runId = ARGV[1]
 local runningStatus = ARGV[2]
 local suspendedStatus = ARGV[3]
@@ -588,8 +594,7 @@ if watcher then
 end
 redis.call('ZREM', dueKey, runId)
 if waitTopic and waitTopic ~= '' then
-  local prefix = string.match(runKey, '^(.*:wf:)')
-  redis.call('SREM', prefix .. 'topic:' .. waitTopic, runId)
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
 end
 redis.call('HSET', runKey, 'status', terminalStatus, 'cancellation_data', ARGV[5],
   'suspension_data', '', 'wait_topic', '', 'resume_at', '',
@@ -602,6 +607,7 @@ return 1
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
 local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
 local runId = ARGV[1]
 local status = redis.call('HGET', runKey, 'status')
 if status ~= ARGV[2] and status ~= ARGV[3] then return 0 end
@@ -615,8 +621,7 @@ if watcher then
 end
 redis.call('ZREM', dueKey, runId)
 if waitTopic and waitTopic ~= '' then
-  local prefix = string.match(runKey, '^(.*:wf:)')
-  redis.call('SREM', prefix .. 'topic:' .. waitTopic, runId)
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
 end
 redis.call('HSET', runKey, 'status', ARGV[4], 'resume_at', '', 'wait_topic', '', 'updated_at', ARGV[5])
 return 1
@@ -626,6 +631,7 @@ return 1
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
 local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
 local runId = ARGV[1]
 local status = redis.call('HGET', runKey, 'status')
 if status ~= ARGV[2] and status ~= ARGV[3] then return 0 end
@@ -639,8 +645,7 @@ if watcher then
 end
 redis.call('ZREM', dueKey, runId)
 if waitTopic and waitTopic ~= '' then
-  local prefix = string.match(runKey, '^(.*:wf:)')
-  redis.call('SREM', prefix .. 'topic:' .. waitTopic, runId)
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
 end
 redis.call('HSET', runKey, 'status', ARGV[4], 'wait_topic', '', 'resume_at', '',
   'suspension_data', ARGV[5], 'execution_id', '', 'owner_id', '',
@@ -669,13 +674,14 @@ return 1
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
 local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
 local status = redis.call('HGET', runKey, 'status')
 if not status then return 0 end
+if status ~= ARGV[1] and status ~= ARGV[2] then return 0 end
 if ARGV[4] ~= '1' then
   redis.call('HSET', runKey, 'last_error', ARGV[5], 'updated_at', ARGV[6])
   return 1
 end
-if status ~= ARGV[1] and status ~= ARGV[2] then return 0 end
 local watcher = redis.call('HGET', watchersHash, ARGV[7])
 if watcher then
   local parsed = cjson.decode(watcher)
@@ -684,6 +690,10 @@ if watcher then
   if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], ARGV[7]) end
 end
 redis.call('ZREM', dueKey, ARGV[7])
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+if waitTopic and waitTopic ~= '' then
+  redis.call('SREM', topicKeyPrefix .. waitTopic, ARGV[7])
+end
 redis.call('HSET', runKey, 'status', ARGV[3], 'last_error', ARGV[5],
   'owner_id', '', 'lease_expires_at', '', 'resume_at', '', 'wait_topic', '',
   'updated_at', ARGV[6])
@@ -933,10 +943,11 @@ return 1
     await _send([
       'EVAL',
       _luaMarkRunning,
-      '3',
+      '4',
       _runKey(runId),
       _watchersHashKey(),
       _dueKey(),
+      _topicKey(''),
       runId,
       WorkflowStatus.running.name,
       WorkflowStatus.suspended.name,
@@ -956,10 +967,11 @@ return 1
     final response = await _send([
       'EVAL',
       _luaCompleteIfActive,
-      '3',
+      '4',
       _runKey(runId),
       _watchersHashKey(),
       _dueKey(),
+      _topicKey(''),
       runId,
       WorkflowStatus.running.name,
       WorkflowStatus.suspended.name,
@@ -981,10 +993,11 @@ return 1
     await _send([
       'EVAL',
       _luaMarkFailed,
-      '3',
+      '4',
       _runKey(runId),
       _watchersHashKey(),
       _dueKey(),
+      _topicKey(''),
       WorkflowStatus.running.name,
       WorkflowStatus.suspended.name,
       WorkflowStatus.failed.name,
@@ -1001,10 +1014,11 @@ return 1
     await _send([
       'EVAL',
       _luaMarkResumed,
-      '3',
+      '4',
       _runKey(runId),
       _watchersHashKey(),
       _dueKey(),
+      _topicKey(''),
       runId,
       WorkflowStatus.running.name,
       WorkflowStatus.suspended.name,
@@ -1158,10 +1172,11 @@ return 1
     final result = await _send([
       'EVAL',
       _luaMarkFailedForExecution,
-      '3',
+      '4',
       _runKey(runId),
       _watchersHashKey(),
       _dueKey(),
+      _topicKey(''),
       executionId,
       WorkflowStatus.failed.name,
       WorkflowStatus.completed.name,
@@ -1322,10 +1337,11 @@ return 1
     final response = await _send([
       'EVAL',
       _luaCancelIfActive,
-      '3',
+      '4',
       _runKey(runId),
       _watchersHashKey(),
       _dueKey(),
+      _topicKey(''),
       runId,
       WorkflowStatus.running.name,
       WorkflowStatus.suspended.name,
@@ -1376,12 +1392,10 @@ return 1
     required String executionId,
     WorkflowJournalCheckpoint? checkpoint,
   }) async {
-    if (entry.revision != expectedRevision + 1 || expectedRevision < 0) {
-      return false;
-    }
-    if (checkpoint != null && entry.kind != WorkflowJournalKind.step) {
-      return false;
-    }
+    entry.validateWrite(
+      expectedRevision: expectedRevision,
+      checkpoint: checkpoint,
+    );
     final compensation = checkpoint?.compensation;
     final response = await _send([
       'EVAL',

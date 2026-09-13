@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Verify terminal error/timestamp immutability, malformed journal argument
+  rejection, empty-token rejection, and quoted-name/empty-retention rewind cases.
 - Add workflow journal contracts for atomic checkpoint coupling, stale writes,
   compensation order, failed-write rollback, and administrative rewind cleanup.
 - Add shared terminal transition contracts covering cancellation/completion

@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Use shared journal argument validation and replace per-record rewind cleanup
+  with one parameterized journal deletion.
 - Join same-data-source transactions without nested queue deadlocks. Drain
   admitted operations before commit and make any admitted failure rollback-only,
   including caught failures. Bind outbox publications to their originating

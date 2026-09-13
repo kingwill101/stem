@@ -102,12 +102,10 @@ class InMemoryWorkflowStore
     required String executionId,
     WorkflowJournalCheckpoint? checkpoint,
   }) async {
-    if (entry.revision != expectedRevision + 1 ||
-        expectedRevision < 0 ||
-        entry.name.isEmpty ||
-        (checkpoint != null && entry.kind != WorkflowJournalKind.step)) {
-      throw ArgumentError('Invalid workflow journal write.');
-    }
+    entry.validateWrite(
+      expectedRevision: expectedRevision,
+      checkpoint: checkpoint,
+    );
     final run = _runs[entry.runId];
     final requiredStatus = entry.kind == WorkflowJournalKind.step
         ? WorkflowStatus.running

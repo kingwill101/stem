@@ -145,18 +145,33 @@ void runWorkflowTerminalContractTests({
     for (final terminalStatus in <WorkflowStatus>[
       WorkflowStatus.completed,
       WorkflowStatus.cancelled,
+      WorkflowStatus.failed,
     ]) {
       test('ordinary mutations cannot resurrect $terminalStatus or add '
           'wait state', () async {
         final id = await create();
+        await store!.markFailed(id, StateError('original'), StackTrace.empty);
         if (terminalStatus == WorkflowStatus.completed) {
           await terminal.completeIfActive(id, 'preserved');
-        } else {
+        } else if (terminalStatus == WorkflowStatus.cancelled) {
           await terminal.cancelIfActive(id, reason: 'preserved');
+        } else {
+          await store!.markFailed(
+            id,
+            StateError('preserved failure'),
+            StackTrace.empty,
+            terminal: true,
+          );
         }
+        final before = (await store!.get(id))!;
+        final errorBefore = before.lastError == null
+            ? null
+            : Map<String, Object?>.of(before.lastError!);
+        clock.advance(const Duration(seconds: 1));
 
         await store!.markRunning(id, stepName: 'step');
         await store!.markFailed(id, StateError('retry'), StackTrace.empty);
+        expect((await store!.get(id))!.lastError, errorBefore);
         await store!.markFailed(
           id,
           StateError('terminal retry'),
@@ -178,9 +193,11 @@ void runWorkflowTerminalContractTests({
         if (terminalStatus == WorkflowStatus.completed) {
           expect(state.result, 'preserved');
           expect(state.cancellationData, isNull);
-        } else {
+        } else if (terminalStatus == WorkflowStatus.cancelled) {
           expect(state.cancellationData?['reason'], 'preserved');
         }
+        expect(state.lastError, errorBefore);
+        expect(state.updatedAt, before.updatedAt);
         expect(state.waitTopic, isNull);
         expect(state.resumeAt, isNull);
         expect(state.suspensionData, isEmpty);

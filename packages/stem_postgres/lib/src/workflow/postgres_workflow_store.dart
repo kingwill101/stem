@@ -200,11 +200,10 @@ ORDER BY position DESC
     required String executionId,
     WorkflowJournalCheckpoint? checkpoint,
   }) async {
-    if (entry.revision != expectedRevision + 1) return false;
-    if (entry.runId.trim().isEmpty || entry.name.trim().isEmpty) return false;
-    if (checkpoint != null && entry.kind != WorkflowJournalKind.step) {
-      return false;
-    }
+    entry.validateWrite(
+      expectedRevision: expectedRevision,
+      checkpoint: checkpoint,
+    );
     final requiredStatus = entry.kind == WorkflowJournalKind.step
         ? WorkflowStatus.running
         : WorkflowStatus.failed;
@@ -1188,27 +1187,23 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
         await ctx.repository<StemWorkflowStep>().insertMany(keep);
       }
 
-      final keptNames = keep.map((step) => step.name).toSet();
-      final journalRows = await ctx.driver.queryRaw(
-        '''
-SELECT DISTINCT name
-FROM stem_workflow_journal
-WHERE namespace = ? AND run_id = ?
-''',
-        [namespace, runId],
-      );
-      for (final row in journalRows) {
-        final name = row['name']! as String;
-        if (!keptNames.contains(name)) {
-          await ctx.driver.executeRaw(
-            '''
+      final keptNames = keep.map((step) => step.name).toList(growable: false);
+      final deleteJournalArgs = <Object?>[namespace, runId];
+      final deleteJournalSql = StringBuffer('''
 DELETE FROM stem_workflow_journal
-WHERE namespace = ? AND run_id = ? AND name = ?
-''',
-            [namespace, runId, name],
-          );
-        }
+WHERE namespace = ? AND run_id = ?
+''');
+      if (keptNames.isNotEmpty) {
+        deleteJournalSql.write(
+          ' AND name NOT IN '
+          '(${List.filled(keptNames.length, '?').join(', ')})',
+        );
+        deleteJournalArgs.addAll(keptNames);
       }
+      await ctx.driver.executeRaw(
+        deleteJournalSql.toString(),
+        deleteJournalArgs,
+      );
 
       // Update run status
       final run = await ctx
