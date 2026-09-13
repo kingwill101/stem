@@ -25,6 +25,7 @@ export 'src/core/contracts.dart'
         TaskRegistrationEvent,
         TaskRegistry;
 export 'src/core/payload_codec.dart';
+export 'src/core/payload_codec_defn.dart';
 export 'src/core/payload_codec_registry.dart';
 export 'src/core/payload_map.dart';
 export 'src/core/retry.dart';

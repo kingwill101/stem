@@ -32,6 +32,9 @@ class PayloadCodec<T> {
   static Object? _unsupportedEncode<T>(T value) => throw UnimplementedError();
   static T _unsupportedDecode<T>(Object? payload) => throw UnimplementedError();
 }
+class PayloadCodecDefn {
+  const PayloadCodecDefn();
+}
 
 class FlowStep {
   FlowStep({
@@ -1353,6 +1356,68 @@ class BadWorkflow {
       contains('serializable or codec-backed DTO type'),
     );
   });
+
+  for (final (label, declarations, task, diagnostic) in [
+    (
+      'non-codec',
+      '@PayloadCodecDefn() const invalid = 1;',
+      '@TaskDefn() Future<int> example() async => 1;',
+      'must annotate a Codec<T, Object?>',
+    ),
+    (
+      'non-SDK Codec lookalike',
+      '''
+class Codec<I, O> {}
+@PayloadCodecDefn() Codec<Foo, Object?> get invalid => Codec<Foo, Object?>();
+''',
+      '@TaskDefn() Future<int> example() async => 1;',
+      'must annotate a Codec<T, Object?>',
+    ),
+    (
+      'wrong output type',
+      '@PayloadCodecDefn() Codec<Foo, String> get invalid => '
+          'throw UnimplementedError();',
+      '@TaskDefn() Future<int> example() async => 1;',
+      'must annotate a Codec<T, Object?>',
+    ),
+    (
+      'duplicate exact type',
+      '''
+@PayloadCodecDefn() Codec<Foo, Object?> get first => throw UnimplementedError();
+@PayloadCodecDefn() Codec<Foo, Object?> get second => throw UnimplementedError();
+''',
+      '@TaskDefn() Future<int> example() async => 1;',
+      'Duplicate @PayloadCodecDefn binding for Foo: first and second',
+    ),
+    (
+      'nullable mismatch',
+      '@PayloadCodecDefn() Codec<Foo, Object?> get nonNullable => '
+          'throw UnimplementedError();',
+      '@TaskDefn() Future<Foo?> example(Foo? value) async => value;',
+      'parameter "value" must use a serializable or codec-backed DTO type',
+    ),
+  ]) {
+    test('rejects explicit codec binding: $label', () async {
+      final input =
+          '''
+import 'dart:convert';
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+class Foo {}
+$declarations
+$task
+''';
+      final result = await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+      );
+      expect(result.succeeded, isFalse);
+      expect(result.errors.join('\n'), contains(diagnostic));
+    });
+  }
 
   test('rejects duplicate logical workflow and task names', () async {
     const input = '''

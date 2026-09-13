@@ -12,6 +12,8 @@
   lifetime attempts. Automatic cleanup follows terminal failure, not cancellation.
 - Add optional complete run-change notifications for native observation, with
   in-memory support and polling fallback for other stores.
+- Export `PayloadCodecDefn` for explicit library-local generated codec bindings,
+  including standard codecs for concrete generic DTO and collection types.
 - Add bounded, coalesced host recovery for registered runnable runs, with
   immutable enqueue/skip/error reports and admitted-operation cleanup.
 - Preserve nullable hosted results through the configured codec using a
