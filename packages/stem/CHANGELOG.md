@@ -58,6 +58,10 @@
   context for authenticated redelivery after finalization failures, including
   expired or revoked deliveries. Finalizers must be idempotent; task and workflow
   writes are not transactional or exactly-once.
+- Persist an effects-complete phase before terminal-failure broker settlement so
+  recovery retries settlement and final marker persistence without repeating
+  completed callbacks or bookkeeping effects. This remains at-least-once: a
+  crash before the phase write can repeat idempotent effects.
 - Add an isolated function-first workflow host prototype with typed
   `execute` / `submit`, named local checkpoints, scoped resource cleanup, and
   host-level codec defaults. Include runnable primitive-JSON and custom-binary

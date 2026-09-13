@@ -523,6 +523,8 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
     final now = _clock.now().toUtc();
 
     await _connections.runInTransaction((ctx) async {
+      // This conditional update takes the run lock before any watcher write,
+      // matching resolution and terminal failure's run-then-watcher order.
       final changed = await _updateActiveRun(ctx, runId, {
         'status': WorkflowStatus.suspended.name,
         'wait_topic': topic,
@@ -1009,6 +1011,7 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
           .query<$StemWorkflowWatcher>()
           .whereEquals('topic', topic)
           .whereEquals('namespace', namespace)
+          .orderBy('runId')
           .limit(limit)
           .get();
 
@@ -1020,7 +1023,33 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
       final now = _clock.now();
       final nowUtc = now.toUtc();
 
-      for (final watcher in watchers) {
+      for (final candidate in watchers) {
+        // The initial watcher query is only a candidate scan. Lock and
+        // re-read the run first, then the exact watcher row. This prevents a
+        // resolver from reviving a run after markFailedForExecution has
+        // terminally failed it, and also observes a replacement watcher for
+        // the same run/topic.
+        final run = await ctx
+            .query<StemWorkflowRun>()
+            .whereEquals('id', candidate.runId)
+            .whereEquals('namespace', namespace)
+            .lock('FOR UPDATE')
+            .first();
+        if (run == null ||
+            run.status != WorkflowStatus.suspended.name ||
+            run.waitTopic != topic) {
+          continue;
+        }
+
+        final watcher = await ctx
+            .query<$StemWorkflowWatcher>()
+            .whereEquals('runId', candidate.runId)
+            .whereEquals('namespace', namespace)
+            .whereEquals('topic', topic)
+            .lock('FOR UPDATE')
+            .first();
+        if (watcher == null) continue;
+
         // Build metadata for resumption
         final data = _decodeMap(watcher.data);
         final metadata = Map<String, Object?>.from(data);
@@ -1035,46 +1064,33 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
           );
         metadata['deliveredAt'] = now.toIso8601String();
 
-        // Update run to mark as running with resolved metadata
-        final run = await ctx
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.running.name,
+          suspensionData: jsonEncode(metadata),
+          updatedAt: nowUtc,
+        ).toMap();
+        updates['wait_topic'] = null;
+        updates['resume_at'] = null;
+        final changed = await ctx
             .query<StemWorkflowRun>()
             .whereEquals('id', watcher.runId)
             .whereEquals('namespace', namespace)
-            .whereIn('status', [
-              WorkflowStatus.running.name,
-              WorkflowStatus.suspended.name,
-            ])
-            .first();
+            .whereEquals('status', WorkflowStatus.suspended.name)
+            .whereEquals('waitTopic', topic)
+            .update(updates);
+        if (changed == 0) continue;
 
-        if (run != null) {
-          final updates = StemWorkflowRunUpdateDto(
-            status: WorkflowStatus.running.name,
-            suspensionData: jsonEncode(metadata),
-            updatedAt: nowUtc,
-          ).toMap();
-          updates['wait_topic'] = null;
-          updates['resume_at'] = null;
-          final changed = await ctx
-              .query<StemWorkflowRun>()
-              .whereEquals('id', watcher.runId)
-              .whereEquals('namespace', namespace)
-              .whereIn('status', [
-                WorkflowStatus.running.name,
-                WorkflowStatus.suspended.name,
-              ])
-              .update(updates);
-          if (changed > 0) {
-            await ctx.repository<$StemWorkflowWatcher>().delete(watcher);
-            resolutions.add(
-              WorkflowWatcherResolution(
-                runId: watcher.runId,
-                stepName: watcher.stepName,
-                topic: topic,
-                resumeData: metadata,
-              ),
-            );
-          }
-        }
+        // Delete the watcher (resolved)
+        await ctx.repository<$StemWorkflowWatcher>().delete(watcher);
+
+        resolutions.add(
+          WorkflowWatcherResolution(
+            runId: watcher.runId,
+            stepName: watcher.stepName,
+            topic: topic,
+            resumeData: metadata,
+          ),
+        );
       }
 
       return resolutions;
@@ -1331,6 +1347,15 @@ WHERE namespace = ? AND run_id = ? AND name = ?
       .update(updates);
 
   Future<void> _deleteWatcher(QueryContext ctx, String runId) async {
+    // Legacy lifecycle methods call this before updating the run. Acquire
+    // the run lock first here too, so they cannot invert the resolver's
+    // run-then-watcher lock order.
+    await ctx
+        .query<StemWorkflowRun>()
+        .whereEquals('id', runId)
+        .whereEquals('namespace', namespace)
+        .lock('FOR UPDATE')
+        .first();
     final watcher = await ctx
         .query<$StemWorkflowWatcher>()
         .whereEquals('runId', runId)
