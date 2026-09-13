@@ -7,15 +7,14 @@ environment:
   sdk: ">=3.13.0 <4.0.0"
 
 dependencies:
-  async: ^2.13.0
   collection: ^1.19.1
   redis: ^4.0.0
   stem: ">=0.5.0 <1.0.0"
   uuid: ^4.5.2
 
 dev_dependencies:
+  async: ^2.13.0
   coverage: ^1.15.0
-  lints: ^6.0.0
   stem_adapter_tests: ">=0.3.0 <1.0.0"
   test: ^1.31.2
   very_good_analysis: ^10.0.0
