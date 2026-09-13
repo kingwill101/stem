@@ -342,6 +342,21 @@ class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     final now = _clock.now().toUtc();
 
     await _connections.runInTransaction((ctx) async {
+      // Lock the run before the watcher so registration has the same lock
+      // order as resolution and fenced terminal failure.
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .lock('FOR UPDATE')
+          .first();
+
+      if (run == null ||
+          (run.status != WorkflowStatus.running.name &&
+              run.status != WorkflowStatus.suspended.name)) {
+        return;
+      }
+
       // Check if watcher already exists
       final existing = await ctx
           .query<$StemWorkflowWatcher>()
@@ -365,27 +380,18 @@ class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
         await ctx.repository<$StemWorkflowWatcher>().insert(watcher);
       }
 
-      // Update the associated run
-      final run = await ctx
-          .query<StemWorkflowRun>()
-          .whereEquals('id', runId)
-          .whereEquals('namespace', namespace)
-          .first();
-
-      if (run != null) {
-        final updates = StemWorkflowRunUpdateDto(
-          status: WorkflowStatus.suspended.name,
-          waitTopic: topic,
-          resumeAt: deadline,
-          suspensionData: jsonEncode(metadata),
-          updatedAt: now,
-        ).toMap();
-        updates['resume_at'] = deadline;
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
-      }
+      final updates = StemWorkflowRunUpdateDto(
+        status: WorkflowStatus.suspended.name,
+        waitTopic: topic,
+        resumeAt: deadline,
+        suspensionData: jsonEncode(metadata),
+        updatedAt: now,
+      ).toMap();
+      updates['resume_at'] = deadline;
+      await ctx.repository<StemWorkflowRun>().update(
+        updates,
+        where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+      );
     });
   }
 
@@ -808,6 +814,7 @@ class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
           .query<$StemWorkflowWatcher>()
           .whereEquals('topic', topic)
           .whereEquals('namespace', namespace)
+          .orderBy('runId')
           .limit(limit)
           .get();
 
@@ -819,7 +826,33 @@ class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       final now = _clock.now();
       final nowUtc = now.toUtc();
 
-      for (final watcher in watchers) {
+      for (final candidate in watchers) {
+        // The initial watcher query is only a candidate scan. Lock and
+        // re-read the run first, then the exact watcher row. This prevents a
+        // resolver from reviving a run after markFailedForExecution has
+        // terminally failed it, and also observes a replacement watcher for
+        // the same run/topic.
+        final run = await ctx
+            .query<StemWorkflowRun>()
+            .whereEquals('id', candidate.runId)
+            .whereEquals('namespace', namespace)
+            .lock('FOR UPDATE')
+            .first();
+        if (run == null ||
+            run.status != WorkflowStatus.suspended.name ||
+            run.waitTopic != topic) {
+          continue;
+        }
+
+        final watcher = await ctx
+            .query<$StemWorkflowWatcher>()
+            .whereEquals('runId', candidate.runId)
+            .whereEquals('namespace', namespace)
+            .whereEquals('topic', topic)
+            .lock('FOR UPDATE')
+            .first();
+        if (watcher == null) continue;
+
         // Build metadata for resumption
         final data = _decodeMap(watcher.data);
         final metadata = Map<String, Object?>.from(data);
@@ -834,29 +867,20 @@ class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
           );
         metadata['deliveredAt'] = now.toIso8601String();
 
-        // Update run to mark as running with resolved metadata
-        final run = await ctx
-            .query<StemWorkflowRun>()
-            .whereEquals('id', watcher.runId)
-            .whereEquals('namespace', namespace)
-            .first();
-
-        if (run != null) {
-          final updates = StemWorkflowRunUpdateDto(
-            status: WorkflowStatus.running.name,
-            suspensionData: jsonEncode(metadata),
-            updatedAt: nowUtc,
-          ).toMap();
-          updates['wait_topic'] = null;
-          updates['resume_at'] = null;
-          await ctx.repository<StemWorkflowRun>().update(
-            updates,
-            where: StemWorkflowRunPartial(
-              id: watcher.runId,
-              namespace: namespace,
-            ),
-          );
-        }
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.running.name,
+          suspensionData: jsonEncode(metadata),
+          updatedAt: nowUtc,
+        ).toMap();
+        updates['wait_topic'] = null;
+        updates['resume_at'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(
+            id: watcher.runId,
+            namespace: namespace,
+          ),
+        );
 
         // Delete the watcher (resolved)
         await ctx.repository<$StemWorkflowWatcher>().delete(watcher);
@@ -1122,6 +1146,15 @@ class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   }
 
   Future<void> _deleteWatcher(QueryContext ctx, String runId) async {
+    // Legacy lifecycle methods call this before updating the run. Acquire
+    // the run lock first here too, so they cannot invert the resolver's
+    // run-then-watcher lock order.
+    await ctx
+        .query<StemWorkflowRun>()
+        .whereEquals('id', runId)
+        .whereEquals('namespace', namespace)
+        .lock('FOR UPDATE')
+        .first();
     final watcher = await ctx
         .query<$StemWorkflowWatcher>()
         .whereEquals('runId', runId)

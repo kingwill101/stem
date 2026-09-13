@@ -15,6 +15,7 @@ Future<void> main() async {
   final namespace = 'fence_${DateTime.now().microsecondsSinceEpoch}';
   final runId = 'concurrent-fenced-failure-$namespace';
   final classificationRunId = 'classification-fenced-failure-$namespace';
+  final watcherRaceRunId = 'watcher-race-$namespace';
 
   setUp(() async {
     first = await PostgresWorkflowStore.connect(uri, namespace: namespace);
@@ -116,6 +117,59 @@ Future<void> main() async {
       final run = await store.get(classificationRunId);
       expect(run!.status, WorkflowStatus.running);
       expect(run.lastError?['error'], contains('attempt'));
+    },
+  );
+
+  test(
+    'a terminal failure wins over a resolver with a stale topic candidate',
+    () async {
+      final store = first!;
+      await store.createRun(
+        workflow: 'fencing.integration',
+        params: const {},
+        runId: watcherRaceRunId,
+      );
+      final claim = (await (store as FencedWorkflowStore).claimRunExecution(
+        watcherRaceRunId,
+        ownerId: 'watcher-race-test',
+      ))!;
+
+      await first!.registerWatcher(
+        watcherRaceRunId,
+        'event-step',
+        'stale.topic',
+      );
+      // Re-registering on the second connection replaces the watcher and
+      // makes the requested topic a stale candidate for the resolver.
+      await second!.registerWatcher(
+        watcherRaceRunId,
+        'event-step',
+        'current.topic',
+      );
+
+      final outcomes = await Future.wait([
+        first!.resolveWatchers('stale.topic', const {'value': 1}),
+        (second! as FencedWorkflowStore).markFailedForExecution(
+          watcherRaceRunId,
+          executionId: claim.executionId,
+          error: StateError('terminal'),
+          stack: StackTrace.empty,
+        ),
+      ]);
+
+      expect(outcomes[0], isEmpty);
+      expect(
+        outcomes[1],
+        anyOf(
+          TerminalFailureResult.applied,
+          TerminalFailureResult.alreadyFailedForExecution,
+        ),
+      );
+      expect(
+        (await store.get(watcherRaceRunId))!.status,
+        WorkflowStatus.failed,
+      );
+      expect(await first!.listWatchers('current.topic'), isEmpty);
     },
   );
 }
