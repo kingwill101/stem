@@ -84,7 +84,16 @@ class PostgresTransactionalOutbox {
   Future<T> transaction<T>(
     Future<T> Function(PostgresOutboxTransaction transaction) action,
   ) {
+    final existing = currentTransaction;
+    if (existing != null && identical(existing.outbox, this)) {
+      // Nested transactions on the same outbox are joins, not savepoints.
+      return _connections.runInTransaction((_) => action(existing));
+    }
     return _connections.runInTransaction((context) {
+      // Construct the transaction in the connection's scope zone. Its
+      // admission zone is deliberately captured before the outbox zone is
+      // layered on top, so a retained transaction can never join a later
+      // transaction on the same data source.
       final transaction = PostgresOutboxTransaction._(
         this,
         context,
@@ -96,6 +105,9 @@ class PostgresTransactionalOutbox {
       );
     });
   }
+
+  Future<T> _admit<T>(Future<T> Function() operation) =>
+      _connections.admitTransactionOperation(operation);
 
   /// Returns the number of rows not yet marked as dispatched.
   Future<int> pendingCount() {
@@ -241,12 +253,16 @@ class PostgresTransactionalOutbox {
 }
 
 /// Active transaction passed to [PostgresTransactionalOutbox.transaction].
+///
+/// The object is valid only while its originating transaction scope is open,
+/// including while admitted work drains. After that scope closes, enqueues
+/// are rejected even when a later transaction uses the same data source.
 class PostgresOutboxTransaction {
   PostgresOutboxTransaction._(
     this.outbox,
     this.context, {
     required this.namespace,
-  });
+  }) : _admissionZone = Zone.current;
 
   /// Outbox that owns this transaction.
   final PostgresTransactionalOutbox outbox;
@@ -256,24 +272,29 @@ class PostgresOutboxTransaction {
 
   /// Namespace used for publications in this transaction.
   final String namespace;
+  final Zone _admissionZone;
 
   /// Adds an already-encoded task envelope to the transaction's outbox.
   Future<void> enqueueEnvelope(
     Envelope envelope, {
     RoutingInfo? routing,
-  }) async {
+  }) {
     final availableAt = envelope.notBefore?.toUtc() ?? DateTime.now().toUtc();
-    await _outboxTable(context).create({
-      'id': envelope.id,
-      'namespace': namespace,
-      'envelope': envelope.toJson(),
-      'routing': routing?.toJson(),
-      'status': 'pending',
-      'available_at': availableAt,
-      'attempts': 0,
-      'created_at': DateTime.now().toUtc(),
-      'updated_at': DateTime.now().toUtc(),
-    });
+    return _admissionZone.run(
+      () => outbox._admit(
+        () => _outboxTable(context).create({
+          'id': envelope.id,
+          'namespace': namespace,
+          'envelope': envelope.toJson(),
+          'routing': routing?.toJson(),
+          'status': 'pending',
+          'available_at': availableAt,
+          'attempts': 0,
+          'created_at': DateTime.now().toUtc(),
+          'updated_at': DateTime.now().toUtc(),
+        }),
+      ),
+    );
   }
 }
 

@@ -2,6 +2,10 @@
 
 ## 0.3.0
 
+- Join same-data-source transactions without nested queue deadlocks. Drain
+  admitted operations before commit and make any admitted failure rollback-only,
+  including caught failures. Bind outbox publications to their originating
+  transaction scope and reject retained or escaped writes after it closes.
 - Add workflow journal persistence with run-row locking, record revision CAS,
   atomic checkpoint/compensation writes, and ordered cleanup recovery.
 - Add atomic first-terminal-wins completion/cancellation and prevent ordinary
