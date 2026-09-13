@@ -95,68 +95,27 @@ Future<void> main() async {
 
 ## Architecture
 
+Define work in Dart. Stem queues it, runs it in workers, and makes task results
+and workflow state available to your application.
+
+```mermaid
+flowchart TB
+    accTitle: How Stem runs background work
+    accDescr: Your application submits tasks, workflows, or scheduled jobs. A work queue delivers them to Stem workers, which execute the work and record results and workflow state.
+
+    app["Your Dart or Flutter app"]
+    work["Tasks, workflows, and schedules"]
+    queue["Work queue"]
+    workers["Stem workers"]
+    results[("Results and workflow state")]
+
+    app --> work --> queue --> workers --> results
 ```
-                               PRODUCERS
-            ┌───────────────────┬───────────────────┬──────────────────┐
-            │                   │                   │                  │
-            v                   v                   v                  v
-       ┌─────────┐        ┌──────────┐        ┌───────────┐        ┌──────────┐
-       │  Stem   │        │  Canvas  │        │ Workflow  │        │  Client  │
-       │ Client  │        │ (chains, │        │   API     │        │  SDKs    │
-       └────┬────┘        │ groups)  │        └─────┬─────┘        └────┬─────┘
-            │             └────┬─────┘              │                    │
-            └──────────────────┼────────────────────┼────────────────────┘
-                               │
-                               v
-        ┌──────────────────────────────────────────────────────────┐
-        │                         BROKER                           │
-        │ queues / leases / acks / nack / delayed / dlq             │
-        └───────────────┬───────────────────────────┬──────────────┘
-                        │                           │
-                        v                           v
-               ┌──────────────────┐         ┌─────────────────────┐
-               │  Workflow Engine │         │       Workers       │
-               │  claim runs &    │         │  (many, independent)│
-               │  schedule steps  │         └───────┬───────┬─────┘
-               └───────┬──────────┘                 │       │
-                       │                            │       │
-            enqueue steps ──────────────────────────┘       │
-                       │                                    │
-                       v                                    v
-            ┌──────────────────┐                  ┌──────────────────┐
-            │  Workflow Store  │                  │  Task Registry   │
-            │  (runs/steps)    │                  │   & Handlers     │
-            └────────┬─────────┘                  └────────┬─────────┘
-                     │                                     │
-                     v                                     v
-            ┌──────────────────┐                  ┌──────────────────┐
-            │    Event Bus     │                  │  Result Backend  │
-            └──────────────────┘                  └──────────────────┘
 
-        ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-
-                              SCHEDULING
-
-            ┌────────────────┐     ┌────────────────┐
-            │ Beat Scheduler │---->│ Schedule Store │
-            │     (cron)     │     └────────────────┘
-            └───────┬────────┘             │
-                    │                      │
-                    v                      v
-                 ┌────────┐          ┌────────────┐
-                 │ Broker │<---------│ Lock Store │
-                 └────────┘          └────────────┘
-            (enqueues scheduled tasks / lease guards)
-
-       ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-
-                             ADAPTERS
-
-         ┌────────────┐   ┌────────────┐   ┌────────────┐
-         │   SQLite   │   │   Redis    │   │  Postgres  │
-         │  (local)   │   │ (streams)  │   │ (durable)  │
-         └────────────┘   └────────────┘   └────────────┘
-```
+Choose **in-memory, SQLite, Redis, or PostgreSQL** adapters for the queue and
+stores. Capabilities vary by adapter; in-memory state is process-local.
+See the [workflow host guide](./packages/stem/doc/workflow_host.md) for
+checkpointing, retries, compensation, and recovery.
 
 ---
 
