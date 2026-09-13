@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.2
+## 0.4.0
 
 - Preserve synchronous collection result types by unwrapping only `Future` and
   `FutureOr`. Normalize task entrypoints without erasing their typed results.
@@ -14,7 +14,7 @@
 - Document standard `dart:convert` codec support in Stem's typed authoring APIs.
   Generated `PayloadCodec.json` helpers remain unchanged and are compatible with
   the standard `Codec` interface in Stem versions that support it.
-- Require Stem `>=0.5.0 <0.6.0` for the coordinated core release.
+- Require Stem `>=0.5.0 <1.0.0`, allowing later pre-1.0 releases.
 
 ## 0.3.1
 

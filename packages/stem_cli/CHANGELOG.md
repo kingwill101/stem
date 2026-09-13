@@ -2,7 +2,8 @@
 
 ## 0.3.0
 
-- Require Stem `>=0.5.0 <0.6.0` and the coordinated 0.3 adapter releases.
+- Require Stem `>=0.5.0 <1.0.0` and adapters `>=0.3.0 <1.0.0`, allowing
+  later pre-1.0 releases.
 
 ## 0.2.1
 

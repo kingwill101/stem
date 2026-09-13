@@ -10,7 +10,8 @@
   workers or relying on stale-execution protection; `terminal: false` records
   error metadata without ending the run, while terminal failure is conditional
   on the captured execution identity.
-- Require Stem `>=0.5.0 <0.6.0` and the shared adapter contract 0.3.0.
+- Require Stem `>=0.5.0 <1.0.0` and the shared adapter contract
+  `>=0.3.0 <1.0.0`, allowing later pre-1.0 releases.
 
 ## 0.2.1
 

@@ -6,7 +6,7 @@
   `executionId` claims, stale-claim rejection, conditional renewal/release and
   terminal-failure recording, including the distinction between `terminal:
   false` error recording and terminal failure.
-- Require Stem `>=0.5.0 <0.6.0` for the coordinated fencing release.
+- Require Stem `>=0.5.0 <1.0.0`, allowing later pre-1.0 releases.
 
 ## 0.2.1
 

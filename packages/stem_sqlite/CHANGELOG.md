@@ -6,7 +6,8 @@
   operations. Run the new migration before using multiple workers against an
   existing database; generated workflow run IDs now use UUIDs so independently
   opened SQLite handles or reopened stores do not collide.
-- Require Stem `>=0.5.0 <0.6.0` and the shared adapter contract 0.3.0.
+- Require Stem `>=0.5.0 <1.0.0` and the shared adapter contract
+  `>=0.3.0 <1.0.0`, allowing later pre-1.0 releases.
 
 ## 0.2.3
 
