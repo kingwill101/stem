@@ -56,7 +56,7 @@ For snapshot UI, `HostedRunBuilder<R>` passes the existing `WorkflowRunView`
 from `HostedRun.watch()` directly to its builder. It does not decode the result;
 use `run.result` when a typed terminal value is needed.
 
-The 0.4 release series requires Stem `>=0.5.0 <0.6.0`. The older Flutter-specific
+The 0.4 release series requires Stem `>=0.5.0 <1.0.0`. The older Flutter-specific
 task runtime APIs remain replaced by the ordinary core application API.
 
 ## Getting started
