@@ -5,12 +5,12 @@ import 'package:stem/stem.dart';
 
 // #region reliability-retry-registry
 List<TaskHandler<Object?>> buildTasks() => [
-      FunctionTaskHandler<void>(
-        name: 'tasks.always_fail',
-        entrypoint: _alwaysFailEntrypoint,
-        options: const TaskOptions(maxRetries: 2, queue: 'retry-demo'),
-      ),
-    ];
+  FunctionTaskHandler<void>(
+    name: 'tasks.always_fail',
+    entrypoint: _alwaysFailEntrypoint,
+    options: const TaskOptions(maxRetries: 2, queue: 'retry-demo'),
+  ),
+];
 // #endregion reliability-retry-registry
 
 // #region reliability-retry-signals

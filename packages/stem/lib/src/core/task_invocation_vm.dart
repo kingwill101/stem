@@ -49,11 +49,10 @@ import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Signature for task entrypoints that can run inside isolate executors.
-typedef TaskEntrypoint =
-    FutureOr<Object?> Function(
-      TaskInvocationContext context,
-      Map<String, Object?> args,
-    );
+typedef TaskEntrypoint = FutureOr<Object?> Function(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+);
 
 /// Control messages emitted by task entrypoints running inside isolates.
 sealed class TaskInvocationSignal {

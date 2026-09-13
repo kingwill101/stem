@@ -15,12 +15,12 @@ Future<RedisResultBackend> connectBackend(String url, {TlsConfig? tls}) {
 }
 
 List<TaskHandler<Object?>> buildTasks() => [
-      FunctionTaskHandler<void>(
-        name: 'ops.ping',
-        options: const TaskOptions(queue: opsQueue),
-        entrypoint: _opsEntrypoint,
-      ),
-    ];
+  FunctionTaskHandler<void>(
+    name: 'ops.ping',
+    options: const TaskOptions(queue: opsQueue),
+    entrypoint: _opsEntrypoint,
+  ),
+];
 
 FutureOr<void> _opsEntrypoint(
   TaskInvocationContext context,

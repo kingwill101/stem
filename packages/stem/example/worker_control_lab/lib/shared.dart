@@ -18,8 +18,10 @@ Future<RedisRevokeStore> connectRevokeStore(String url) {
   return RedisRevokeStore.connect(url, namespace: 'stem');
 }
 
-List<TaskHandler<Object?>> buildTasks() =>
-    [ControlLongTask(), ControlQuickTask()];
+List<TaskHandler<Object?>> buildTasks() => [
+  ControlLongTask(),
+  ControlQuickTask(),
+];
 
 class ControlLongTask extends TaskHandler<String> {
   @override
@@ -30,9 +32,9 @@ class ControlLongTask extends TaskHandler<String> {
 
   @override
   TaskMetadata get metadata => const TaskMetadata(
-        description: 'Long-running task that emits heartbeats and progress.',
-        tags: ['control', 'long-running'],
-      );
+    description: 'Long-running task that emits heartbeats and progress.',
+    tags: ['control', 'long-running'],
+  );
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {
@@ -67,9 +69,9 @@ class ControlQuickTask extends TaskHandler<String> {
 
   @override
   TaskMetadata get metadata => const TaskMetadata(
-        description: 'Short task for baseline worker throughput.',
-        tags: ['control', 'quick'],
-      );
+    description: 'Short task for baseline worker throughput.',
+    tags: ['control', 'quick'],
+  );
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {

@@ -1178,8 +1178,7 @@ class WorkerStatusCommand extends Command<int> {
       )
       ..addOption(
         'metrics-exporters',
-        help:
-            'Comma separated metrics exporters (console,otlp:http://host,prometheus).',
+        help: 'Comma separated metrics exporters (console,otlp:http://host,prometheus).',
       );
   }
 
@@ -1656,14 +1655,12 @@ class WorkerMultiCommand extends Command<int> {
     argParser
       ..addMultiOption(
         'command',
-        help:
-            'Executable and arguments for each worker node (repeat the option to provide multiple tokens).',
+        help: 'Executable and arguments for each worker node (repeat the option to provide multiple tokens).',
         valueHelp: 'arg',
       )
       ..addOption(
         'command-line',
-        help:
-            'Full command string (with optional quoting) executed per node when starting workers.',
+        help: 'Full command string (with optional quoting) executed per node when starting workers.',
         valueHelp: 'cmd',
       )
       ..addMultiOption(
@@ -1682,8 +1679,7 @@ class WorkerMultiCommand extends Command<int> {
         'pidfile',
         defaultsTo: '/var/run/stem/%n.pid',
         valueHelp: 'path',
-        help:
-            'PID file template. Supports %n (node), %h (hostname), %I (index), %d (UTC timestamp).',
+        help: 'PID file template. Supports %n (node), %h (hostname), %I (index), %d (UTC timestamp).',
       )
       ..addOption(
         'logfile',
@@ -1706,22 +1702,19 @@ class WorkerMultiCommand extends Command<int> {
       ..addFlag(
         'detach',
         defaultsTo: true,
-        help:
-            'Run processes in the background (use --no-detach or --foreground to stay attached).',
+        help: 'Run processes in the background (use --no-detach or --foreground to stay attached).',
       )
       ..addFlag(
         'foreground',
         defaultsTo: false,
         negatable: false,
-        help:
-            'Alias for --no-detach. Runs a single node in the foreground and inherits stdio.',
+        help: 'Alias for --no-detach. Runs a single node in the foreground and inherits stdio.',
       )
       ..addOption(
         'timeout',
         defaultsTo: '30s',
         valueHelp: 'duration',
-        help:
-            'Grace period before forcing termination when stopping or restarting nodes.',
+        help: 'Grace period before forcing termination when stopping or restarting nodes.',
       );
   }
 
@@ -1815,9 +1808,8 @@ class WorkerMultiCommand extends Command<int> {
 
     RoutingRegistry registry;
     try {
-      registry = RoutingConfigLoader(
-        StemRoutingContext.fromConfig(config),
-      ).load();
+      registry = RoutingConfigLoader(StemRoutingContext.fromConfig(config))
+          .load();
     } on StateError catch (error) {
       dependencies.err.writeln(error.message);
       return 64;

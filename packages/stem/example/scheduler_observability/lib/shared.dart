@@ -15,12 +15,12 @@ Future<RedisResultBackend> connectBackend(String url, {TlsConfig? tls}) {
 }
 
 List<TaskHandler<Object?>> buildTasks() => [
-      FunctionTaskHandler<void>(
-        name: 'scheduler.demo',
-        options: const TaskOptions(queue: scheduleQueue),
-        entrypoint: _scheduledEntrypoint,
-      ),
-    ];
+  FunctionTaskHandler<void>(
+    name: 'scheduler.demo',
+    options: const TaskOptions(queue: scheduleQueue),
+    entrypoint: _scheduledEntrypoint,
+  ),
+];
 
 FutureOr<void> _scheduledEntrypoint(
   TaskInvocationContext context,

@@ -38,8 +38,11 @@ import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/signals/signal.dart';
 
 /// Function signature for reporting signal errors.
-typedef SignalErrorReporter =
-    void Function(String signalName, Object error, StackTrace stackTrace);
+typedef SignalErrorReporter = void Function(
+  String signalName,
+  Object error,
+  StackTrace stackTrace,
+);
 
 /// Configuration for controlling Stem signals behavior.
 class StemSignalConfiguration {

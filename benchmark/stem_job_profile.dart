@@ -179,9 +179,8 @@ Future<_ProfileBatch> _enqueueBatch(
 }
 
 Future<List<TaskStatus>> _awaitBatch(List<Future<TaskStatus>> waiters) async {
-  final statuses = await Future.wait(
-    waiters,
-  ).timeout(const Duration(minutes: 10));
+  final statuses = await Future.wait(waiters)
+      .timeout(const Duration(minutes: 10));
   for (final status in statuses) {
     if (status.state != TaskState.succeeded) {
       throw StateError(

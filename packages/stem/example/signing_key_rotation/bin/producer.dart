@@ -26,7 +26,8 @@ Future<void> main() async {
 
   final taskCount = _parseInt('TASKS', fallback: 5, min: 1);
   // #region signing-rotation-producer-active-key
-  final keyId = config.signing.activeKeyId ??
+  final keyId =
+      config.signing.activeKeyId ??
       Platform.environment['STEM_SIGNING_ACTIVE_KEY'] ??
       'unknown';
   stdout.writeln(

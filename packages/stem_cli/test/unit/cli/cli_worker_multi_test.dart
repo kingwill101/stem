@@ -79,9 +79,8 @@ void main() {
       final commandLine =
           '${Platform.resolvedExecutable} --disable-dart-dev "${scriptPath.replaceAll('"', '\\"')}"';
 
-      File(
-        envFilePath,
-      ).writeAsStringSync('STEM_WORKER_COMMAND="$commandLine"\n');
+      File(envFilePath)
+          .writeAsStringSync('STEM_WORKER_COMMAND="$commandLine"\n');
 
       baseEnvironment = Map<String, String>.from(Platform.environment)
         ..['PATH'] = Platform.environment['PATH'] ?? ''

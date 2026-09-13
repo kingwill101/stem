@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
+
 import '../lib/shared.dart';
 
 Future<void> main() async {

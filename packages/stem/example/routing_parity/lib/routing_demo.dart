@@ -35,22 +35,22 @@ RoutingRegistry buildRoutingRegistry() =>
     RoutingRegistry(RoutingConfig.fromYaml(_demoRoutingYaml));
 
 List<TaskHandler<Object?>> buildDemoTasks() => [
-      FunctionTaskHandler<void>(
-        name: 'billing.invoice',
-        entrypoint: _processInvoice,
-        options: const TaskOptions(queue: 'standard', maxRetries: 2),
-      ),
-      FunctionTaskHandler<void>(
-        name: 'reports.generate',
-        entrypoint: _processReport,
-        options: const TaskOptions(queue: 'critical', maxRetries: 3),
-      ),
-      FunctionTaskHandler<void>(
-        name: 'ops.status',
-        entrypoint: _handleBroadcast,
-        options: const TaskOptions(queue: 'standard'),
-      ),
-    ];
+  FunctionTaskHandler<void>(
+    name: 'billing.invoice',
+    entrypoint: _processInvoice,
+    options: const TaskOptions(queue: 'standard', maxRetries: 2),
+  ),
+  FunctionTaskHandler<void>(
+    name: 'reports.generate',
+    entrypoint: _processReport,
+    options: const TaskOptions(queue: 'critical', maxRetries: 3),
+  ),
+  FunctionTaskHandler<void>(
+    name: 'ops.status',
+    entrypoint: _handleBroadcast,
+    options: const TaskOptions(queue: 'standard'),
+  ),
+];
 
 Future<void> _processInvoice(
   TaskInvocationContext context,

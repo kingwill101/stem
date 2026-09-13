@@ -222,21 +222,24 @@ Future<void> main(List<String> args) async {
           'id': status.id,
           'expected': status.expected,
           'completed': status.results.length,
-          'results': status.results.map((key, value) => MapEntry(
-                key,
-                {
-                  'state': value.state.name,
-                  'attempt': value.attempt,
-                  'meta': value.meta,
-                },
-              )),
+          'results': status.results.map(
+            (key, value) => MapEntry(
+              key,
+              {
+                'state': value.state.name,
+                'attempt': value.attempt,
+                'meta': value.meta,
+              },
+            ),
+          ),
         }),
         headers: {'content-type': 'application/json'},
       );
     });
 
-  final handler =
-      const Pipeline().addMiddleware(logRequests()).addHandler(router.call);
+  final handler = const Pipeline()
+      .addMiddleware(logRequests())
+      .addHandler(router.call);
 
   final port = int.tryParse(Platform.environment['PORT'] ?? '8081') ?? 8081;
   final server = await serve(
@@ -268,8 +271,7 @@ Future<void> main(List<String> args) async {
 FutureOr<Object?> _placeholderEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    'noop';
+) => 'noop';
 
 SecurityContext? _buildHttpSecurityContext() {
   final cert = Platform.environment['ENQUEUER_TLS_CERT']?.trim();
@@ -328,7 +330,8 @@ class _AutoFillController {
     _tick++;
     for (var index = 0; index < batchSize; index++) {
       final spec = _demoTaskSpecs[(_tick + index) % _demoTaskSpecs.length];
-      final shouldFail = failureEvery > 0 &&
+      final shouldFail =
+          failureEvery > 0 &&
           _tick % failureEvery == 0 &&
           index == 0 &&
           (spec.queue == 'greetings' || spec.queue == 'billing');

@@ -255,7 +255,10 @@ Future<Map<String, Object?>> _runPhase(
           budget,
           onTimeout: () {
             deadlineObserved = true;
-            throw TimeoutException('$phase submission deadline exceeded', timeout);
+            throw TimeoutException(
+              '$phase submission deadline exceeded',
+              timeout,
+            );
           },
         );
       } finally {

@@ -67,9 +67,8 @@ class RoutingDumpCommand extends Command<int> {
       registry = RoutingRegistry(RoutingConfig.legacy());
     } else {
       try {
-        registry = RoutingConfigLoader(
-          StemRoutingContext.fromConfig(config),
-        ).load();
+        registry = RoutingConfigLoader(StemRoutingContext.fromConfig(config))
+            .load();
       } on StateError catch (error) {
         dependencies.err.writeln(error.message);
         return 64;

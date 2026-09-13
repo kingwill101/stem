@@ -104,8 +104,7 @@ class HealthCommand extends Command<int> {
         'allow-insecure',
         defaultsTo: false,
         negatable: false,
-        help:
-            'Temporarily allow TLS handshakes without certificate validation for debugging.',
+        help: 'Temporarily allow TLS handshakes without certificate validation for debugging.',
       )
       ..addFlag(
         'json',

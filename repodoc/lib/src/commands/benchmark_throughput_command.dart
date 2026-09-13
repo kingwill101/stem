@@ -64,8 +64,7 @@ final class BenchmarkThroughputCommand extends Command<int> {
       )
       ..addOption(
         'sqlite-path',
-        help:
-            'SQLite database path; otherwise a temporary .tmp database is used.',
+        help: 'SQLite database path; otherwise a temporary .tmp database is used.',
       )
       ..addFlag('verbose', help: 'Log benchmark lifecycle stages to stderr.')
       ..addFlag(

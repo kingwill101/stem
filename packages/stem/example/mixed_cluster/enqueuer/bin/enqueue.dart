@@ -103,5 +103,4 @@ Future<StemClient> _buildPostgresClient(StemConfig config) async {
 FutureOr<Object?> _noopEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    'noop';
+) => 'noop';

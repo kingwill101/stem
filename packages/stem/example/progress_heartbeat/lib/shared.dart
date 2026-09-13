@@ -57,9 +57,9 @@ class ProgressTask extends TaskHandler<String> {
 
   @override
   TaskMetadata get metadata => const TaskMetadata(
-        description: 'Task that reports progress and heartbeats on a loop.',
-        tags: ['progress', 'heartbeat'],
-      );
+    description: 'Task that reports progress and heartbeats on a loop.',
+    tags: ['progress', 'heartbeat'],
+  );
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {

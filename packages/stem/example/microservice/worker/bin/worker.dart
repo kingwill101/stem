@@ -80,22 +80,24 @@ Future<void> main(List<String> args) async {
   final signer = PayloadSigner.maybe(config.signing);
   // #endregion signing-worker-signer
 
-  final tasks = _taskSpecs.map<TaskHandler<Object?>>((spec) {
-    final entrypoint = _taskEntrypoints[spec.name];
-    if (entrypoint == null) {
-      throw StateError('Missing task entrypoint for ${spec.name}');
-    }
-    return FunctionTaskHandler<String>(
-      name: spec.name,
-      entrypoint: entrypoint,
-      options: TaskOptions(
-        queue: spec.queue,
-        maxRetries: spec.maxRetries,
-        softTimeLimit: spec.softLimit,
-        hardTimeLimit: spec.hardLimit,
-      ),
-    );
-  }).toList(growable: false);
+  final tasks = _taskSpecs
+      .map<TaskHandler<Object?>>((spec) {
+        final entrypoint = _taskEntrypoints[spec.name];
+        if (entrypoint == null) {
+          throw StateError('Missing task entrypoint for ${spec.name}');
+        }
+        return FunctionTaskHandler<String>(
+          name: spec.name,
+          entrypoint: entrypoint,
+          options: TaskOptions(
+            queue: spec.queue,
+            maxRetries: spec.maxRetries,
+            softTimeLimit: spec.softLimit,
+            hardTimeLimit: spec.hardLimit,
+          ),
+        );
+      })
+      .toList(growable: false);
 
   final observability = ObservabilityConfig.fromEnvironment();
   final configuredWorkerName = Platform.environment['STEM_WORKER_NAME']?.trim();
@@ -105,8 +107,8 @@ Future<void> main(List<String> args) async {
       : 'greetings';
   final resolvedWorkerName =
       configuredWorkerName != null && configuredWorkerName.isNotEmpty
-          ? configuredWorkerName
-          : 'microservice-worker-${Platform.environment['HOSTNAME'] ?? pid}';
+      ? configuredWorkerName
+      : 'microservice-worker-${Platform.environment['HOSTNAME'] ?? pid}';
 
   // #region signing-worker-wire
   final worker = Worker(
@@ -143,38 +145,32 @@ Future<void> main(List<String> args) async {
 FutureOr<Object?> _greetingSendEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    _taskEntrypoint('greeting.send', context, args);
+) => _taskEntrypoint('greeting.send', context, args);
 
 FutureOr<Object?> _customerFollowupEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    _taskEntrypoint('customer.followup', context, args);
+) => _taskEntrypoint('customer.followup', context, args);
 
 FutureOr<Object?> _billingChargeEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    _taskEntrypoint('billing.charge', context, args);
+) => _taskEntrypoint('billing.charge', context, args);
 
 FutureOr<Object?> _billingSettlementEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    _taskEntrypoint('billing.settlement', context, args);
+) => _taskEntrypoint('billing.settlement', context, args);
 
 FutureOr<Object?> _reportsAggregateEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    _taskEntrypoint('reports.aggregate', context, args);
+) => _taskEntrypoint('reports.aggregate', context, args);
 
 FutureOr<Object?> _reportsPublishEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    _taskEntrypoint('reports.publish', context, args);
+) => _taskEntrypoint('reports.publish', context, args);
 
 FutureOr<Object?> _taskEntrypoint(
   String taskName,
@@ -193,11 +189,14 @@ FutureOr<Object?> _taskEntrypoint(
   final totalSteps = (delayMs / 200).ceil().clamp(1, 60);
   for (var step = 1; step <= totalSteps; step++) {
     context.heartbeat();
-    context.progress(step / totalSteps, data: {
-      'step': step,
-      'totalSteps': totalSteps,
-      'name': name,
-    });
+    context.progress(
+      step / totalSteps,
+      data: {
+        'step': step,
+        'totalSteps': totalSteps,
+        'name': name,
+      },
+    );
     await Future<void>.delayed(const Duration(milliseconds: 200));
   }
   if (fail) {

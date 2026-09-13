@@ -54,8 +54,7 @@ class ObserveQueuesCommand extends Command<int> {
     argParser.addOption(
       'file',
       abbr: 'f',
-      help:
-          'Path to queue snapshot JSON (omit to query the live broker/backend).',
+      help: 'Path to queue snapshot JSON (omit to query the live broker/backend).',
     );
   }
 

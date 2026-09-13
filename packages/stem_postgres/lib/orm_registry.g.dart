@@ -1,6 +1,7 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
 import 'package:ormed/ormed.dart';
+
 import 'src/database/models/stem_broadcast_ack.dart';
 import 'src/database/models/stem_broadcast_message.dart';
 import 'src/database/models/stem_dead_letter.dart';

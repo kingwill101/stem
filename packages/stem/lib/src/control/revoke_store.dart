@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:stem/src/core/clock.dart';
 
 /// Represents a persisted revoke entry for a task.

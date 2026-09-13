@@ -43,9 +43,8 @@ Future<void> main(List<String> args) async {
         _ExampleProject(
           path: p.dirname(entity.path),
           tool: dependencies.contains('flutter') ? 'flutter' : 'dart',
-          hasBuildRunner: _dependencyNames(
-            yaml['dev_dependencies'],
-          ).contains('build_runner'),
+          hasBuildRunner: _dependencyNames(yaml['dev_dependencies'])
+              .contains('build_runner'),
         ),
       );
     }

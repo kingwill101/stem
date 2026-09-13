@@ -6,7 +6,8 @@ import 'package:stem_progress_heartbeat/shared.dart';
 Future<void> main() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379/0';
-  final backendUrl = Platform.environment['STEM_RESULT_BACKEND_URL'] ??
+  final backendUrl =
+      Platform.environment['STEM_RESULT_BACKEND_URL'] ??
       'redis://localhost:6379/1';
   final workerName =
       Platform.environment['WORKER_NAME'] ?? 'progress-worker-${pid}';

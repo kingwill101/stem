@@ -54,8 +54,7 @@ class _WorkflowStartCommand extends Command<int> {
       )
       ..addOption(
         'max-suspend',
-        help:
-            'Auto-cancel when a suspension exceeds this duration (e.g. 30s, 5m).',
+        help: 'Auto-cancel when a suspension exceeds this duration (e.g. 30s, 5m).',
       );
   }
 

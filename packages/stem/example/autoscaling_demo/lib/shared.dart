@@ -15,12 +15,12 @@ Future<RedisResultBackend> connectBackend(String url, {TlsConfig? tls}) {
 }
 
 List<TaskHandler<Object?>> buildTasks() => [
-      FunctionTaskHandler<void>(
-        name: 'autoscale.work',
-        options: const TaskOptions(queue: autoscaleQueue),
-        entrypoint: _autoscaleEntrypoint,
-      ),
-    ];
+  FunctionTaskHandler<void>(
+    name: 'autoscale.work',
+    options: const TaskOptions(queue: autoscaleQueue),
+    entrypoint: _autoscaleEntrypoint,
+  ),
+];
 
 FutureOr<void> _autoscaleEntrypoint(
   TaskInvocationContext context,

@@ -88,7 +88,7 @@ Future<void> main(List<String> args) async {
           task(
             'greeting.send',
             args: {'name': name},
-          )
+          ),
       ]);
       await dispatch.dispose();
       final groupId = dispatch.groupId;
@@ -109,14 +109,16 @@ Future<void> main(List<String> args) async {
           'id': status.id,
           'expected': status.expected,
           'completed': status.results.length,
-          'results': status.results.map((key, value) => MapEntry(
-                key,
-                {
-                  'state': value.state.name,
-                  'attempt': value.attempt,
-                  'meta': value.meta,
-                },
-              )),
+          'results': status.results.map(
+            (key, value) => MapEntry(
+              key,
+              {
+                'state': value.state.name,
+                'attempt': value.attempt,
+                'meta': value.meta,
+              },
+            ),
+          ),
         }),
         headers: {'content-type': 'application/json'},
       );
@@ -132,12 +134,14 @@ Future<void> main(List<String> args) async {
       );
     });
 
-  final handler =
-      const Pipeline().addMiddleware(logRequests()).addHandler(router.call);
+  final handler = const Pipeline()
+      .addMiddleware(logRequests())
+      .addHandler(router.call);
 
   final server = await serve(handler, InternetAddress.anyIPv4, port);
   stdout.writeln(
-      'HTTP server listening on http://${server.address.address}:$port');
+    'HTTP server listening on http://${server.address.address}:$port',
+  );
 
   void handleShutdown(ProcessSignal signal) async {
     stdout.writeln('Received $signal, shutting down...');

@@ -58,9 +58,8 @@ final class ProfileJobCommand extends Command<int> {
       args.addAll(['--output', output]);
     }
     if (argResults?['json'] == true) args.add('--json');
-    await ProcessRunner(
-      environment: catalog.processEnvironment,
-    ).run('dart', args, workingDirectory: root, label: 'AOT job profile');
+    await ProcessRunner(environment: catalog.processEnvironment)
+        .run('dart', args, workingDirectory: root, label: 'AOT job profile');
     return 0;
   }
 

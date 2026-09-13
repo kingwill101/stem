@@ -1,8 +1,10 @@
 import 'dart:async';
 
 /// Reconstructed executable cleanup handler; only its stable ID is persisted.
-typedef WorkflowCompensationHandler =
-    FutureOr<void> Function(WorkflowCompensationContext context, Object? input);
+typedef WorkflowCompensationHandler = FutureOr<void> Function(
+  WorkflowCompensationContext context,
+  Object? input,
+);
 
 /// Context for one claimed compensation attempt.
 final class WorkflowCompensationContext {

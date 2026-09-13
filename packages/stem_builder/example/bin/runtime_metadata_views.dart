@@ -7,9 +7,7 @@ import 'package:stem/stem.dart';
 import 'package:stem_builder_example/definitions.dart';
 
 Future<void> main() async {
-  final app = await StemWorkflowApp.inMemory(
-    module: stemModule,
-  );
+  final app = await StemWorkflowApp.inMemory(module: stemModule);
   final runtime = app.runtime;
 
   try {

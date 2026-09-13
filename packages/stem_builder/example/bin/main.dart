@@ -19,9 +19,7 @@ Future<void> main() async {
     ),
   );
 
-  final app = await StemWorkflowApp.inMemory(
-    module: stemModule,
-  );
+  final app = await StemWorkflowApp.inMemory(module: stemModule);
   try {
     await app.start();
     final runtimeManifest = app
@@ -46,9 +44,7 @@ Future<void> main() async {
     await app.close();
   }
 
-  final taskApp = await StemApp.inMemory(
-    module: stemModule,
-  );
+  final taskApp = await StemApp.inMemory(module: stemModule);
   try {
     await taskApp.start();
     final taskResult = await StemTaskDefinitions.builderExamplePing

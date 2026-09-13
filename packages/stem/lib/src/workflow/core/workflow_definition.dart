@@ -68,8 +68,9 @@ import 'package:stem/src/workflow/workflow.dart' show Flow;
 import 'package:stem/stem.dart' show Flow;
 
 /// Declarative workflow definition built via [FlowBuilder].
-typedef WorkflowScriptBody<T extends Object?> =
-    FutureOr<T> Function(WorkflowScriptContext context);
+typedef WorkflowScriptBody<T extends Object?> = FutureOr<T> Function(
+  WorkflowScriptContext context,
+);
 
 /// Identifies whether a workflow is step-based or script-based.
 enum WorkflowDefinitionKind {

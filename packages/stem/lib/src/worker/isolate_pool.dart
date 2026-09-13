@@ -67,8 +67,9 @@ import 'package:stem/src/worker/isolate_messages.dart';
 import 'package:stem/src/worker/worker.dart';
 
 /// A handler for task control signals.
-typedef TaskControlHandler =
-    FutureOr<void> Function(TaskInvocationSignal signal);
+typedef TaskControlHandler = FutureOr<void> Function(
+  TaskInvocationSignal signal,
+);
 
 /// Reason an isolate was recycled or disposed.
 enum IsolateRecycleReason {

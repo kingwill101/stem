@@ -3,8 +3,9 @@ import 'dart:collection';
 
 import 'package:redis/redis.dart';
 
-typedef RedisCommandResponder =
-    FutureOr<Object?> Function(List<Object?> command);
+typedef RedisCommandResponder = FutureOr<Object?> Function(
+  List<Object?> command,
+);
 
 class FakeRedisConnection extends RedisConnection {
   bool closed = false;

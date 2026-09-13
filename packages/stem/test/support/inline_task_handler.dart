@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:stem/stem.dart';
 
-typedef InlineTaskCallback<R> =
-    FutureOr<R> Function(TaskContext context, Map<String, Object?> args);
+typedef InlineTaskCallback<R> = FutureOr<R> Function(
+  TaskContext context,
+  Map<String, Object?> args,
+);
 
 class InlineTaskHandler<R> extends TaskHandler<R> {
   InlineTaskHandler({

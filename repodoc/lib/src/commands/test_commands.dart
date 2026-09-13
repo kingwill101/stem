@@ -93,9 +93,8 @@ final class PackageTestCommand extends Command<int> {
         Platform.environment,
       ))['STEM_CLI_RUN_MULTI'] = 'true';
     }
-    final resolvedEnvironment = await TestOrchestrator(
-      catalog,
-    ).resolveDependencies(environment: environment);
+    final resolvedEnvironment = await TestOrchestrator(catalog)
+        .resolveDependencies(environment: environment);
     await ProcessRunner(environment: catalog.processEnvironment).run(
       'dart',
       ['test', '--fail-fast'],
