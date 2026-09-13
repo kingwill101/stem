@@ -2,6 +2,10 @@
 
 ## 0.5.0
 
+- Settle unrecoverable persisted terminal-failure markers through dead-lettering
+  or queue-only discard instead of leaving their deliveries in flight. Preserve
+  retryable callback failures and recovery of a later failed attempt from an
+  older delivery.
 - Add optional `FencedWorkflowStore` execution fencing for workflow leases and
   managed terminal-failure finalization. Each successful claim receives a fresh
   `executionId`; lease renew/release and failure recording require that captured

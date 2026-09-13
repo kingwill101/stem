@@ -2594,19 +2594,78 @@ class Worker {
   }) async {
     final marker = status.meta[_terminalFailureEnvelopeKey];
     if (marker is! Map) {
-      throw StateError('Cannot finalize persisted failure for ${status.id}');
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-invalid-marker',
+      );
     }
-    final markerMap = marker.cast<String, Object?>();
+
+    // Catch only persisted marker decoding failures here. Callback and
+    // bookkeeping failures below must leave the delivery available for retry.
+    late final Map<String, Object?> markerMap;
+    late final Envelope envelope;
+    try {
+      markerMap = Map<String, Object?>.from(marker);
+    } on Object {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-invalid-marker',
+      );
+    }
     final storedEnvelope = markerMap['envelope'] ?? marker;
     if (storedEnvelope is! Map) {
-      throw StateError('Cannot finalize persisted failure for ${status.id}');
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-invalid-envelope',
+      );
     }
-    final envelope = Envelope.fromJson(storedEnvelope.cast<String, Object?>());
+    try {
+      envelope = Envelope.fromJson(Map<String, Object?>.from(storedEnvelope));
+      // Envelope.fromJson uses lazy casts for nested maps. Materialize them
+      // here so malformed keys remain validation failures, not callback-time
+      // exceptions that can strand the delivery.
+      Map<String, Object?>.from(envelope.args);
+      Map<String, String>.from(envelope.headers);
+      Map<String, Object?>.from(envelope.meta);
+    } on Object {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-invalid-envelope',
+      );
+    }
+
+    if (envelope.id != status.id || envelope.id != delivery.envelope.id) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-id-mismatch',
+      );
+    }
+    if (envelope.name != delivery.envelope.name) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-name-mismatch',
+      );
+    }
+    // Compare with the persisted failure, not the wakeup delivery: an older
+    // delivery can legitimately recover a later attempt's terminal bookkeeping.
+    if (envelope.attempt != status.attempt) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-attempt-mismatch',
+      );
+    }
     final handler = registry.resolve(envelope.name);
-    if (envelope.id != status.id ||
-        envelope.attempt != status.attempt ||
-        handler is! TaskTerminalFailureHandler) {
-      throw StateError('Cannot finalize persisted failure for ${status.id}');
+    if (handler == null) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-handler-unavailable',
+      );
+    }
+    if (handler is! TaskTerminalFailureHandler) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-handler-incompatible',
+      );
     }
     if (markerMap[_terminalFailureLifecycleKey] == _terminalFailureDone) {
       await _releaseUniqueLock(envelope);
@@ -2631,6 +2690,17 @@ class Worker {
           : _terminalFailureDeadLetterAction,
     );
     return envelope;
+  }
+
+  Future<Envelope?> _settleInvalidTaskFailureRecovery(
+    Delivery delivery, {
+    required String reason,
+  }) async {
+    // Do not include marker contents or task payload in broker diagnostics.
+    // Settlement errors intentionally propagate so the broker can retry them.
+    await _deadLetterOrDiscard(delivery, reason: reason);
+    await _releaseUniqueLock(delivery.envelope);
+    return null;
   }
 
   Future<void> _completeTerminalFailure({

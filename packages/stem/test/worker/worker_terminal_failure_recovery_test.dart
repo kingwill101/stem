@@ -172,6 +172,196 @@ void main() {
       expect(broker.linkPublications, 1);
     },
   );
+
+  for (final deadLetters in [true, false]) {
+    group('invalid failure recovery with deadLetters=$deadLetters', () {
+      test('non-string marker key', () async {
+        await _expectInvalidRecovery(
+          deadLetters: deadLetters,
+          marker: (_) => {1: 'invalid'},
+          reason: 'terminal-failure-invalid-marker',
+        );
+      });
+      test('non-map envelope', () async {
+        await _expectInvalidRecovery(
+          deadLetters: deadLetters,
+          marker: (_) => {'envelope': 'not-an-envelope'},
+          reason: 'terminal-failure-invalid-envelope',
+        );
+      });
+      for (final invalid
+          in <
+            ({
+              String name,
+              Map<String, Object?> overrides,
+              String reason,
+            })
+          >[
+            (
+              name: 'malformed nested arguments',
+              overrides: {
+                'args': {1: 'invalid'},
+              },
+              reason: 'terminal-failure-invalid-envelope',
+            ),
+            (
+              name: 'mismatched id',
+              overrides: {'id': 'another-task'},
+              reason: 'terminal-failure-id-mismatch',
+            ),
+            (
+              name: 'mismatched name',
+              overrides: {'name': 'another-handler'},
+              reason: 'terminal-failure-name-mismatch',
+            ),
+            (
+              name: 'mismatched persisted attempt',
+              overrides: {'attempt': 1},
+              reason: 'terminal-failure-attempt-mismatch',
+            ),
+          ]) {
+        test(invalid.name, () async {
+          await _expectInvalidRecovery(
+            deadLetters: deadLetters,
+            marker: (envelope) => {
+              'envelope': {...envelope.toJson(), ...invalid.overrides},
+            },
+            reason: invalid.reason,
+          );
+        });
+      }
+      test('handler no longer supports terminal callbacks', () async {
+        await _expectInvalidRecovery(
+          deadLetters: deadLetters,
+          marker: (envelope) => {'envelope': envelope.toJson()},
+          reason: 'terminal-failure-handler-incompatible',
+          compatibleHandler: false,
+        );
+      });
+    });
+  }
+
+  test('older delivery recovers the persisted failure attempt', () async {
+    final broker = InMemoryBroker();
+    final backend = InMemoryResultBackend();
+    final task = _ExplicitRetryTask();
+    addTearDown(broker.close);
+    addTearDown(backend.close);
+    final delivery = Envelope(name: task.name, args: const {});
+    final persisted = delivery.copyWith(attempt: 2);
+    await backend.set(
+      delivery.id,
+      TaskState.failed,
+      attempt: persisted.attempt,
+      meta: {
+        'stem.terminalFailureEnvelope': {'envelope': persisted.toJson()},
+      },
+    );
+    await broker.publish(delivery);
+    await _drainRecovery(broker, backend, task);
+    expect(task.calls, 0);
+    expect(task.finalizations, 1);
+    expect(task.finalizedEnvelopes.single.attempt, 2);
+    expect(await broker.inflightCount('default'), 0);
+  });
+}
+
+Future<void> _expectInvalidRecovery({
+  required bool deadLetters,
+  required Map<Object?, Object?> Function(Envelope) marker,
+  required String reason,
+  bool compatibleHandler = true,
+}) async {
+  final underlying = InMemoryBroker();
+  final queueOnly = _QueueOnlyBroker(underlying);
+  final broker = deadLetters ? underlying : queueOnly;
+  final backend = InMemoryResultBackend();
+  final task = _ExplicitRetryTask();
+  addTearDown(broker.close);
+  addTearDown(backend.close);
+  final envelope = Envelope(name: task.name, args: const {});
+  await backend.set(
+    envelope.id,
+    TaskState.failed,
+    attempt: envelope.attempt,
+    meta: {'stem.terminalFailureEnvelope': marker(envelope)},
+  );
+  await broker.publish(envelope);
+  final handler = compatibleHandler
+      ? task
+      : FunctionTaskHandler<void>.inline(
+          name: task.name,
+          entrypoint: (_, _) => fail('Recovery must not run the handler.'),
+        );
+  final outcome = await _drainRecovery(broker, backend, handler);
+  expect(outcome.reason, isNot(WorkerRunStopReason.failed));
+  expect(task.calls, 0);
+  expect(task.finalizations, 0);
+  expect((await backend.get(envelope.id))!.state, TaskState.failed);
+  expect(await underlying.inflightCount('default'), 0);
+  expect(await underlying.pendingCount('default'), 0);
+  final entries = (await underlying.listDeadLetters('default')).entries;
+  if (deadLetters) {
+    expect(entries, hasLength(1));
+    expect(entries.single.reason, reason);
+  } else {
+    expect(entries, isEmpty);
+    expect(queueOnly.discards, 1);
+  }
+}
+
+Future<WorkerRunOutcome> _drainRecovery(
+  QueueBroker broker,
+  InMemoryResultBackend backend,
+  TaskHandler<void> handler,
+) =>
+    Worker(
+      broker: broker,
+      backend: backend,
+      tasks: [handler],
+      concurrency: 1,
+      lifecycle: const WorkerLifecycleConfig(installSignalHandlers: false),
+    ).runUntilIdle(
+      budget: const Duration(seconds: 1),
+      shutdownReserve: const Duration(milliseconds: 100),
+      idleTimeout: const Duration(milliseconds: 10),
+    );
+
+/// Exposes no optional dead-letter capability.
+class _QueueOnlyBroker implements QueueBroker {
+  _QueueOnlyBroker(this.delegate);
+
+  final InMemoryBroker delegate;
+  int discards = 0;
+
+  @override
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) =>
+      delegate.publish(envelope, routing: routing);
+
+  @override
+  Stream<Delivery> consume(
+    RoutingSubscription subscription, {
+    int prefetch = 1,
+    String? consumerGroup,
+    String? consumerName,
+  }) => delegate.consume(
+    subscription,
+    prefetch: prefetch,
+    consumerGroup: consumerGroup,
+    consumerName: consumerName,
+  );
+
+  @override
+  Future<void> ack(Delivery delivery) => delegate.ack(delivery);
+
+  @override
+  Future<void> nack(Delivery delivery, {bool requeue = true}) async {
+    if (!requeue) discards++;
+    await delegate.nack(delivery, requeue: requeue);
+  }
+
+  @override
+  Future<void> close() => delegate.close();
 }
 
 class _LinkPublicationBroker extends InMemoryBroker {
@@ -238,6 +428,7 @@ class _ExplicitRetryTask
     implements TaskHandler<void>, TaskTerminalFailureHandler {
   int calls = 0;
   int finalizations = 0;
+  final finalizedEnvelopes = <Envelope>[];
 
   @override
   String get name => 'recovery.explicit';
@@ -257,5 +448,6 @@ class _ExplicitRetryTask
   @override
   Future<void> onTerminalFailure(Envelope envelope, TaskStatus status) async {
     finalizations++;
+    finalizedEnvelopes.add(envelope);
   }
 }
