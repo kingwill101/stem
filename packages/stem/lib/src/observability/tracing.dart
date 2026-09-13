@@ -214,6 +214,30 @@ class StemTracer {
     }
   }
 
+  /// Adds a bounded lifecycle event to the active recording span.
+  ///
+  /// This never obtains a tracer or initializes the SDK. Lifecycle events must
+  /// not create an unrelated root span just because no task span is active.
+  void addEvent(
+    String name, {
+    Map<String, Object> attributes = const {},
+    dotel.Context? context,
+  }) {
+    if (!_isTelemetryReady) return;
+    try {
+      final span = (context ?? dotel.Context.current).span;
+      if (span == null || !span.isRecording || !span.spanContext.isValid) {
+        return;
+      }
+      final eventAttributes = attributes.isEmpty
+          ? null
+          : dotel.Attributes.of(Map<String, Object>.from(attributes));
+      span.addEventNow(name, eventAttributes);
+    } on Object {
+      // Observability must never change task lifecycle semantics.
+    }
+  }
+
   dotel.SpanContext? _spanContextFrom(dotel.Context context) {
     final span = context.span;
     if (span != null && span.spanContext.isValid) {

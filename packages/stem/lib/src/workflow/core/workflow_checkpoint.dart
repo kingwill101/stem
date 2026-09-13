@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 
@@ -39,7 +41,7 @@ class WorkflowCheckpoint {
   /// Creates checkpoint metadata backed by a typed [valueCodec].
   static WorkflowCheckpoint typed<T>({
     required String name,
-    required PayloadCodec<T> valueCodec,
+    required Codec<T, Object?> valueCodec,
     bool autoVersion = false,
     String? title,
     WorkflowStepKind kind = WorkflowStepKind.task,

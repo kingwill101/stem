@@ -175,6 +175,7 @@ class StemBroadcastMessages {
   }) => Model.findOrFail<$StemBroadcastMessage>(id, connection: connection);
 
   static Future<List<$StemBroadcastMessage>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemBroadcastMessage>(connection: connection);
 
   static Future<int> count({String? connection}) =>

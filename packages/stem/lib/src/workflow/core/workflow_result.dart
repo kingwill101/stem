@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -60,7 +62,7 @@ class WorkflowResult<T extends Object?> {
   }
 
   /// Decodes the raw persisted workflow result with [codec].
-  TResult? payloadAs<TResult>({required PayloadCodec<TResult> codec}) {
+  TResult? payloadAs<TResult>({required Codec<TResult, Object?> codec}) {
     final stored = rawResult;
     if (stored == null) return null;
     return codec.decode(stored);

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/payload_map.dart';
@@ -45,7 +47,7 @@ abstract interface class WorkflowExecutionContext
 /// Typed read helpers for workflow start parameters.
 extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   /// Decodes the full workflow start-parameter payload through [codec].
-  T paramsAs<T>({required PayloadCodec<T> codec}) {
+  T paramsAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(params);
   }
 
@@ -77,17 +79,17 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   }
 
   /// Returns the decoded workflow parameter for [key], or `null`.
-  T? param<T>(String key, {PayloadCodec<T>? codec}) {
+  T? param<T>(String key, {Codec<T, Object?>? codec}) {
     return params.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded workflow parameter for [key], or [fallback].
-  T paramOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T paramOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return params.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded workflow parameter for [key], throwing when absent.
-  T requiredParam<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredParam<T>(String key, {Codec<T, Object?>? codec}) {
     return params.requiredValue<T>(key, codec: codec);
   }
 
@@ -294,7 +296,7 @@ extension WorkflowExecutionContextValues on WorkflowExecutionContext {
   ///
   /// When [codec] is supplied, a non-`T` durable payload is decoded through
   /// that codec before being returned.
-  T? previousValue<T>({PayloadCodec<T>? codec}) {
+  T? previousValue<T>({Codec<T, Object?>? codec}) {
     final value = previousResult;
     if (value == null) return null;
     if (codec != null && value is! T) {
@@ -305,7 +307,7 @@ extension WorkflowExecutionContextValues on WorkflowExecutionContext {
 
   /// Returns the decoded prior step/checkpoint value as [T], throwing when the
   /// workflow does not yet have a previous result.
-  T requiredPreviousValue<T>({PayloadCodec<T>? codec}) {
+  T requiredPreviousValue<T>({Codec<T, Object?>? codec}) {
     final value = previousValue<T>(codec: codec);
     if (value == null) {
       throw StateError('WorkflowExecutionContext.previousResult is null.');

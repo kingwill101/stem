@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
@@ -507,7 +508,7 @@ class _RecordingEnqueuer implements TaskEnqueuer {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -529,7 +530,7 @@ class _RecordingEnqueuer implements TaskEnqueuer {
 Map<String, Object?> _encodeTestTaskArgs<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {
@@ -626,10 +627,11 @@ class _RecordingWorkflowEventEmitter implements WorkflowEventEmitter {
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) async {
+    final encoded = codec == null ? value : codec.encode(value);
     topics.add(topic);
-    payloads.add(Map<String, Object?>.from(value! as Map));
+    payloads.add(Map<String, Object?>.from(encoded! as Map));
   }
 
   @override

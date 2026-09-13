@@ -706,8 +706,8 @@ void main() {
         final workflowApp = await StemWorkflowApp.inMemory(
           flows: [flow],
         );
-        await workflowApp.start();
         try {
+          // Drive both executions explicitly; a started worker would race them.
           final runId = await workflowApp.startWorkflow('workflow.json.emit');
           await workflowApp.executeRun(runId);
 
@@ -715,6 +715,7 @@ void main() {
             'workflow.json.emit.topic',
             const _DemoPayload('baz'),
           );
+          await workflowApp.executeRun(runId);
 
           final run = await workflowApp.waitForCompletion<String>(
             runId,
@@ -757,8 +758,8 @@ void main() {
         final workflowApp = await StemWorkflowApp.inMemory(
           flows: [flow],
         );
-        await workflowApp.start();
         try {
+          // Drive both executions explicitly; a started worker would race them.
           final runId = await workflowApp.startWorkflow(
             'workflow.versioned.json.emit',
           );
@@ -769,6 +770,7 @@ void main() {
             const _DemoPayload('qux'),
             version: 2,
           );
+          await workflowApp.executeRun(runId);
 
           final run = await workflowApp.waitForCompletion<String>(
             runId,

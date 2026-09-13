@@ -20,6 +20,19 @@ class _RecordingSpanExporter implements dotel.SpanExporter {
   Future<void> shutdown() async {}
 }
 
+class _RejectRetryBroker extends InMemoryBroker {
+  int rejectedRetries = 0;
+
+  @override
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
+    if (envelope.attempt > 0) {
+      rejectedRetries++;
+      throw StateError('retry publication rejected');
+    }
+    await super.publish(envelope, routing: routing);
+  }
+}
+
 Future<void> _waitFor(Future<bool> Function() predicate) async {
   const timeout = Duration(seconds: 2);
   final deadline = DateTime.now().add(timeout);
@@ -376,5 +389,137 @@ void main() {
 
     expect(headers['traceparent'], existingTraceparent);
     expect(headers['tracestate'], existingTracestate);
+  });
+
+  test('adds lifecycle events only to the supplied recording span', () async {
+    dotel.Context? outerContext;
+    await StemTracer.instance.trace('event.outer', () async {
+      outerContext = StemTracer.instance.ambientContextOrNull();
+      await StemTracer.instance.trace('event.inner', () async {
+        StemTracer.instance.addEvent(
+          'stem.task.retry_scheduled',
+          context: outerContext,
+          attributes: {'stem.task': 'event.test', 'stem.retry.delay_ms': 10},
+        );
+      });
+    });
+
+    final outer = exporter.spans.singleWhere(
+      (span) => span.name == 'event.outer',
+    );
+    final inner = exporter.spans.singleWhere(
+      (span) => span.name == 'event.inner',
+    );
+    expect(
+      outer.spanEvents?.map((event) => event.name),
+      contains('stem.task.retry_scheduled'),
+    );
+    expect(
+      inner.spanEvents?.map((event) => event.name),
+      isNot(contains('stem.task.retry_scheduled')),
+    );
+
+    // The span is no longer recording after trace completes, so this is a
+    // no-op rather than an attempt to create a new unrelated root.
+    StemTracer.instance.addEvent(
+      'stem.task.revoked',
+      context: outerContext,
+    );
+    expect(
+      outer.spanEvents?.where((event) => event.name == 'stem.task.revoked'),
+      isEmpty,
+    );
+  });
+
+  test('records retry_scheduled after a worker publishes the retry', () async {
+    final broker = InMemoryBroker();
+    final backend = InMemoryResultBackend();
+    var calls = 0;
+    final registry = InMemoryTaskRegistry()
+      ..register(
+        FunctionTaskHandler<void>.inline(
+          name: 'trace.retry',
+          entrypoint: (context, args) async {
+            if (calls++ == 0) {
+              await context.retry(
+                countdown: const Duration(milliseconds: 1),
+                maxRetries: 1,
+              );
+            }
+            return null;
+          },
+        ),
+      );
+    final worker = Worker(
+      broker: broker,
+      registry: registry,
+      backend: backend,
+      heartbeatTransport: const NoopHeartbeatTransport(),
+    );
+    await worker.start();
+    final stem = Stem(broker: broker, registry: registry, backend: backend);
+    final taskId = await stem.enqueue('trace.retry');
+
+    await _waitFor(() async {
+      return (await backend.get(taskId))?.state == TaskState.succeeded;
+    });
+    await worker.shutdown();
+    broker.dispose();
+
+    final consume = exporter.spans
+        .where((span) => span.name == 'stem.consume')
+        .toList(growable: false);
+    final retryEvents = consume
+        .expand((span) => span.spanEvents ?? const <dotel.SpanEvent>[])
+        .where((event) => event.name == 'stem.task.retry_scheduled')
+        .toList();
+    expect(retryEvents, hasLength(1));
+    expect(
+      retryEvents.single.attributes?.getString('stem.task'),
+      'trace.retry',
+    );
+    expect(
+      retryEvents.single.attributes?.getInt('stem.retry.delay_ms'),
+      1,
+    );
+  });
+
+  test('failed retry publication does not emit retry_scheduled', () async {
+    final broker = _RejectRetryBroker();
+    final backend = InMemoryResultBackend();
+    addTearDown(broker.close);
+    addTearDown(backend.close);
+    final registry = InMemoryTaskRegistry()
+      ..register(
+        FunctionTaskHandler<void>.inline(
+          name: 'trace.retry-rejected',
+          entrypoint: (context, args) => context.retry(
+            countdown: Duration.zero,
+            maxRetries: 1,
+          ),
+        ),
+      );
+    final worker = Worker(
+      broker: broker,
+      registry: registry,
+      backend: backend,
+      heartbeatTransport: const NoopHeartbeatTransport(),
+      lifecycle: const WorkerLifecycleConfig(installSignalHandlers: false),
+    );
+    addTearDown(worker.shutdown);
+    final stem = Stem(broker: broker, registry: registry, backend: backend);
+    await stem.enqueue('trace.retry-rejected');
+    await worker.runUntilIdle(
+      budget: const Duration(seconds: 2),
+      shutdownReserve: Duration.zero,
+      idleTimeout: const Duration(milliseconds: 100),
+    );
+    expect(broker.rejectedRetries, 1);
+    expect(
+      exporter.spans
+          .expand((span) => span.spanEvents ?? const <dotel.SpanEvent>[])
+          .where((event) => event.name == 'stem.task.retry_scheduled'),
+      isEmpty,
+    );
   });
 }

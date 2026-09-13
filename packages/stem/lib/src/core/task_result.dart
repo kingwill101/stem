@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart' show Stem;
@@ -38,7 +40,7 @@ class TaskResult<T extends Object?> {
   }
 
   /// Decodes the raw persisted task payload with [codec].
-  TResult? payloadAs<TResult>({required PayloadCodec<TResult> codec}) {
+  TResult? payloadAs<TResult>({required Codec<TResult, Object?> codec}) {
     final stored = rawPayload;
     if (stored == null) return null;
     return codec.decode(stored);

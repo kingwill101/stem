@@ -233,7 +233,7 @@ Future<void> sendEmail(
             contains('WorkflowScript('),
             contains('stemModule = StemModule('),
             contains('TypedTaskHandler'),
-            contains("part of 'workflows.dart';"),
+            contains('part of "workflows.dart";'),
             isNot(contains('StemGeneratedTaskEnqueuer')),
             isNot(contains('StemGeneratedTaskResults')),
             isNot(contains('waitForSendEmail(')),
@@ -1353,4 +1353,164 @@ class BadWorkflow {
       contains('serializable or codec-backed DTO type'),
     );
   });
+
+  test('rejects duplicate logical workflow and task names', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+@WorkflowDefn(name: 'same')
+class First { @WorkflowStep() Future<void> step() async {} }
+@WorkflowDefn(name: 'same')
+class Second { @WorkflowStep() Future<void> step() async {} }
+@TaskDefn(name: 'sameTask')
+void one() {}
+@TaskDefn(name: 'sameTask')
+void two() {}
+''';
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+    );
+    expect(result.succeeded, isFalse);
+    expect(result.errors.join('\n'), contains('First, Second'));
+  });
+
+  test(
+    'rejects duplicate logical task names without workflow conflicts',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+@TaskDefn(name: 'duplicate')
+Future<void> firstTask() async {}
+@TaskDefn(name: 'duplicate')
+Future<void> secondTask() async {}
+''';
+      final result = await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+      );
+      expect(result.succeeded, isFalse);
+      expect(
+        result.errors.join('\n'),
+        contains('Duplicate logical task names'),
+      );
+      expect(result.errors.join('\n'), contains('firstTask, secondTask'));
+    },
+  );
+
+  for (final (firstType, laterType, succeeds) in [
+    ('int', 'num', true),
+    ('String', 'String?', true),
+    ('num', 'int', false),
+    ('String?', 'String', false),
+  ]) {
+    test('flow input $firstType to $laterType has safe direction', () async {
+      final input =
+          '''
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+@WorkflowDefn(name: 'directional.flow')
+class DirectionalFlow {
+  @WorkflowStep() Future<void> first($firstType value) async {}
+  @WorkflowStep() Future<void> later($laterType value) async {}
+}
+''';
+      final result = await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+      );
+      expect(result.succeeded, succeeds, reason: result.errors.join('\n'));
+    });
+  }
+
+  test('rejects flow inputs with conflicting later-step types', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+@WorkflowDefn(name: 'typed.flow')
+class TypedFlow {
+  @WorkflowStep() Future<void> first(String value) async {}
+  @WorkflowStep() Future<void> second(int value) async {}
+}
+''';
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+    );
+    expect(result.succeeded, isFalse);
+    expect(
+      result.errors.join('\n'),
+      allOf(contains('TypedFlow'), contains('second'), contains('value')),
+    );
+  });
+
+  test(
+    'rejects flow step parameters absent from the starter contract',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+@WorkflowDefn(name: 'flow')
+class FlowWorkflow {
+  @WorkflowStep(name: 'first') Future<int> first(String value) async => 1;
+  @WorkflowStep(name: 'later') Future<int> later(int count) async => count;
+}
+''';
+      final result = await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+      );
+      expect(result.succeeded, isFalse);
+      expect(result.errors.join('\n'), contains('first step'));
+    },
+  );
+
+  test(
+    'preserves sync collection results and escapes dollar strings',
+    () async {
+      const input = r'''
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+@WorkflowDefn(name: 'price\$flow')
+class PriceWorkflow {
+  @WorkflowStep() List<int> step() => [1, 2];
+}
+@TaskDefn(name: 'price\$task')
+List<int> task() => [1];
+''';
+      await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            allOf([
+              contains('NoArgsWorkflowRef<List<int>>'),
+              contains(r'"price\$flow"'),
+              contains(r'"price\$task"'),
+              contains('Future<List<int>>.sync'),
+            ]),
+          ),
+        },
+      );
+    },
+  );
 }

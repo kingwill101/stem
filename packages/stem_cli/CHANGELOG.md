@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+- Require Stem `>=0.5.0 <1.0.0` and adapters `>=0.3.0 <1.0.0`, allowing
+  later pre-1.0 releases.
+
 ## 0.2.1
 
 - Widened Stem compatibility to include the 0.4 portable runtime line.

@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.5.0
+
+- Settle unrecoverable persisted terminal-failure markers through dead-lettering
+  or queue-only discard instead of leaving their deliveries in flight. Preserve
+  retryable callback failures and recovery of a later failed attempt from an
+  older delivery.
+- Add optional `FencedWorkflowStore` execution fencing for workflow leases and
+  managed terminal-failure finalization. Each successful claim receives a fresh
+  `executionId`; lease renew/release and failure recording require that captured
+  identity, so stale workflow deliveries cannot mutate a newer execution.
+  `terminal: false` records error metadata while leaving status and lease
+  available to retry policy; terminal failure uses `terminal: true`.
+- Workflow runner recovery carries the trusted execution token captured with the
+  delivery. Stores that do not implement `FencedWorkflowStore` cannot provide
+  safe managed terminal failure; the runtime logs that limitation rather than
+  falling back to an unsafe owner-only mutation. Fencing is not exactly-once
+  execution, does not fence every workflow write, and does not make external
+  side effects transactional.
+- Accept standard `dart:convert` `Codec<T, Object?>` implementations across typed
+  task, workflow, event, checkpoint, and payload-reading APIs. `PayloadCodec<T>`
+  now extends `Codec` while retaining its existing constructors, versioned
+  formats, and custom `encodeDynamic` / `decodeDynamic` dispatch.
+- **Migration for custom implementers:** widen overridden codec parameters from
+  `PayloadCodec<T>?` to `Codec<T, Object?>?`. Classes using
+  `implements PayloadCodec<T>` must also implement the inherited `Codec` members.
+  Existing constructor-based codecs and ordinary subclasses remain supported.
+- Add optional `PayloadCodecRegistry` with JSON-compatible defaults, explicit
+  standard-codec registration, nullable lifting, and immutable registration
+  snapshots. Custom codecs are format-agnostic; existing map-envelope and
+  backend storage requirements still apply. Transport encoder IDs and stored
+  payload formats are unchanged.
+- Finalize failed workflows when their runner tasks exhaust retries. Add opt-in
+  `TaskTerminalFailureHandler`, awaited before settlement, with trusted persisted
+  context for authenticated redelivery after finalization failures, including
+  expired or revoked deliveries. Finalizers must be idempotent; task and workflow
+  writes are not transactional or exactly-once.
+- Persist an effects-complete phase before terminal-failure broker settlement so
+  recovery retries settlement and final marker persistence without repeating
+  completed callbacks or bookkeeping effects. This remains at-least-once: a
+  crash before the phase write can repeat idempotent effects.
+- Add an isolated function-first workflow host prototype with typed
+  `execute` / `submit`, named local checkpoints, scoped resource cleanup, and
+  host-level codec defaults. Include runnable primitive-JSON and custom-binary
+  examples. The host remains experimental, and in-memory state does not survive
+  process exit.
+- Add `DartasticSdkMetricsExporter` to connect built-in measurements to an
+  already initialized SDK without taking ownership of it. Add task age and
+  workflow/step lifecycle metrics, preserving replay and suspension semantics
+  and avoiding per-run metric labels. Counters remain process-local observations.
+- Add a native local-viewer example exporting traces, existing Stem metrics, and
+  correlated structured logs over OTLP HTTP/protobuf. Correct the tracing setup
+  documentation: the SDK must be initialized explicitly; `STEM_TRACE_EXPORTER`
+  is not supported.
+- Record bounded retry, revocation/cancellation, and lease-renewal-failure span
+  events without initializing telemetry or changing task behavior. Retry events
+  follow successful publication, and lease events use the originating delivery
+  context. Extend the local demo with retry/failure scenarios and Canvas links.
+
 ## 0.4.2
 
 - Recover the unpublished 0.4.1 release using a fresh tag and an isolated

@@ -205,6 +205,7 @@ class StemRevokeEntries {
       Model.findOrFail<$StemRevokeEntry>(id, connection: connection);
 
   static Future<List<$StemRevokeEntry>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemRevokeEntry>(connection: connection);
 
   static Future<int> count({String? connection}) =>

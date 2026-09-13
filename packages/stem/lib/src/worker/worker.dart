@@ -101,6 +101,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -144,6 +145,15 @@ import 'package:stem/src/worker/worker_run.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
+
+const _terminalFailureEnvelopeKey = 'stem.terminalFailureEnvelope';
+const _terminalFailureLifecycleKey = 'state';
+const _terminalFailureActionKey = 'action';
+const _terminalFailurePending = 'pending';
+const _terminalFailureEffectsComplete = 'effects-complete';
+const _terminalFailureDone = 'done';
+const _terminalFailureDeadLetterAction = 'dead-letter';
+const _terminalFailureNackAction = 'nack';
 
 /// Shutdown modes for workers.
 ///
@@ -702,6 +712,7 @@ class Worker {
   int? _lastQueueDepth;
   final Map<String, RevokeEntry> _revocations = {};
   final Map<String, RevokeEntry> _queuePauses = {};
+  final Map<Delivery, dotel.Context> _deliveryTraceContexts = Map.identity();
   int _latestRevocationVersion = 0;
   DateTime? _startedAt;
   int _startedCount = 0;
@@ -1025,37 +1036,24 @@ class Worker {
     await tracer.trace(
       'stem.consume',
       () async {
+        final consumeContext = tracer.ambientContextOrNull();
+        if (consumeContext != null) {
+          _deliveryTraceContexts[delivery] = consumeContext;
+        }
         // Start lease protection as soon as the delivery enters the worker.
         // Consume middleware, signature verification, status lookups, and
         // rate-limit calls all happen before handler execution and can be
         // slower than a short broker visibility timeout.
-        _scheduleLeaseRenewal(delivery);
         var deliveryTracked = false;
         try {
+          _scheduleLeaseRenewal(delivery);
           final handler = registry.resolve(envelope.name);
-          if (handler == null) {
-            await _deadLetterOrDiscard(delivery, reason: 'unregistered-task');
-            await _releaseUniqueLock(envelope);
-            return;
-          }
-
           final argsEncoder = _resolveArgsEncoder(handler);
           final resultEncoder = _resolveResultEncoder(handler);
 
           await _runConsumeMiddleware(delivery);
 
           final groupId = envelope.headers['stem-group-id'];
-
-          if (_isTaskRevoked(envelope.id)) {
-            await _handleRevokedDelivery(
-              delivery,
-              envelope,
-              resultEncoder,
-              groupId: groupId,
-            );
-            await _releaseUniqueLock(envelope);
-            return;
-          }
 
           if (signer != null) {
             try {
@@ -1074,13 +1072,45 @@ class Worker {
             }
           }
 
+          final priorStatus = await backend.get(envelope.id);
+          // Finalization belongs to the persisted failure, not to this
+          // redelivery's expiry, revocation, or potentially changed arguments.
+          // Signature validation still precedes all recovery callbacks.
+          if (priorStatus?.state == TaskState.failed &&
+              _hasTerminalFailureRecord(priorStatus!)) {
+            await _finalizeTaskFailure(
+              priorStatus,
+              delivery: delivery,
+              resultEncoder: resultEncoder,
+            );
+            return;
+          }
+
+          // Executing a task needs a handler; recovering already-recorded
+          // terminal effects does not. Authentication still precedes both.
+          if (handler == null) {
+            await _deadLetterOrDiscard(delivery, reason: 'unregistered-task');
+            await _releaseUniqueLock(envelope);
+            return;
+          }
+
+          if (_isTaskRevoked(envelope.id)) {
+            await _handleRevokedDelivery(
+              delivery,
+              envelope,
+              resultEncoder,
+              groupId: groupId,
+            );
+            await _releaseUniqueLock(envelope);
+            return;
+          }
+
           if (_isExpired(envelope)) {
             await _handleExpiredDelivery(delivery, envelope, resultEncoder);
             await _releaseUniqueLock(envelope);
             return;
           }
 
-          final priorStatus = await backend.get(envelope.id);
           if (priorStatus?.state.isTerminal ?? false) {
             // An acknowledgement can be lost after the result is durable. Do
             // not execute a redelivered terminal task a second time.
@@ -1280,6 +1310,16 @@ class Worker {
             'stem.tasks.started',
             tags: {'task': envelope.name, 'queue': envelope.queue},
           );
+          final queueWait = stemNow().toUtc().difference(envelope.enqueuedAt);
+          if (!queueWait.isNegative) {
+            StemMetrics.instance.recordDuration(
+              // The envelope timestamp predates scheduled/retry deliveries,
+              // so this is task age rather than broker-only queue wait.
+              'stem.task.age',
+              queueWait,
+              tags: {'task': envelope.name, 'queue': envelope.queue},
+            );
+          }
           _startedCount += 1;
 
           String? startedAtIso;
@@ -1348,6 +1388,7 @@ class Worker {
           dynamic result;
           var completionState = TaskState.running;
           var terminalWriteOwned = false;
+          var failureLinksFinalized = false;
 
           try {
             checkTermination();
@@ -1468,9 +1509,12 @@ class Worker {
               resultEncoder,
               request,
               groupId,
+              context,
             );
             completionState = completion.state;
             terminalWriteOwned = completion.terminalWriteOwned;
+            failureLinksFinalized =
+                terminalWriteOwned && completionState == TaskState.failed;
           } on Object catch (error, stack) {
             await _notifyErrorMiddleware(context, error, stack);
             _heartbeatTimers.remove(delivery)?.cancel();
@@ -1483,14 +1527,18 @@ class Worker {
               stack,
               groupId,
               startedAtIso,
+              context,
             );
             completionState = completion.state;
             terminalWriteOwned = completion.terminalWriteOwned;
+            failureLinksFinalized =
+                terminalWriteOwned && completionState == TaskState.failed;
           } finally {
             if (terminalWriteOwned && completionState == TaskState.succeeded) {
               await _dispatchLinkedTasks(envelope, onSuccess: true);
             } else if (terminalWriteOwned &&
-                completionState == TaskState.failed) {
+                completionState == TaskState.failed &&
+                !failureLinksFinalized) {
               await _dispatchLinkedTasks(envelope, onSuccess: false);
             }
             heartbeatTimer?.cancel();
@@ -1535,6 +1583,7 @@ class Worker {
           // normal terminal handling. The inner lifecycle finally also
           // cancels this timer after acknowledgement and task postrun hooks.
           _cancelLeaseTimer(delivery);
+          _deliveryTraceContexts.remove(delivery);
         }
       },
       context: parentContext,
@@ -1768,6 +1817,19 @@ class Worker {
     Object error,
     StackTrace stackTrace,
   ) {
+    final consumeContext = _deliveryTraceContexts[delivery];
+    if (consumeContext != null) {
+      StemTracer.instance.addEvent(
+        'stem.lease.renewal_failed',
+        context: consumeContext,
+        attributes: {
+          'stem.task': delivery.envelope.name,
+          'stem.queue': delivery.envelope.queue,
+          'stem.task.attempt': delivery.envelope.attempt,
+          'stem.error.type': error.runtimeType.toString(),
+        },
+      );
+    }
     _boundedRun?.fail(error, stackTrace);
     StemMetrics.instance.increment(
       'stem.lease.renewal_failed',
@@ -2050,6 +2112,7 @@ class Worker {
   Future<void> _dispatchLinkedTasks(
     Envelope envelope, {
     required bool onSuccess,
+    bool propagateErrors = false,
   }) async {
     final key = onSuccess ? 'stem.link' : 'stem.linkError';
     final raw = envelope.meta[key];
@@ -2087,6 +2150,11 @@ class Worker {
       try {
         final enqueuer = _enqueuer;
         if (enqueuer == null) {
+          if (propagateErrors) {
+            throw StateError(
+              'Cannot finalize linked tasks without an enqueuer.',
+            );
+          }
           stemLogger.warning(
             'Skipping linked task enqueue; no enqueuer configured.',
             Context(_logContext({'task': name})),
@@ -2115,6 +2183,7 @@ class Worker {
             }),
           ),
         );
+        if (propagateErrors) rethrow;
       }
     }
   }
@@ -2395,6 +2464,7 @@ class Worker {
     StackTrace stack,
     String? groupId,
     String? startedAtIso,
+    TaskContext context,
   ) async {
     final outcome = _processor.classifyFailure(envelope, handler, error, stack);
     if (outcome is TaskProcessRetry) {
@@ -2466,6 +2536,14 @@ class Worker {
           'worker': consumerName,
           'failedAt': stemNow().toIso8601String(),
           'startedAt': startedAtIso,
+          if (handler is TaskTerminalFailureHandler)
+            _terminalFailureEnvelopeKey: {
+              'version': 1,
+              _terminalFailureLifecycleKey: _terminalFailurePending,
+              _terminalFailureActionKey: _terminalFailureDeadLetterAction,
+              'envelope': envelope.toJson(),
+              'context': context.terminalFailureContext,
+            },
         },
       );
       final failureStatus = TaskStatus(
@@ -2491,35 +2569,186 @@ class Worker {
           terminalWriteOwned: false,
         );
       }
-      await _deadLetterOrDiscard(
-        delivery,
+      await _completeTerminalFailure(
+        delivery: delivery,
+        envelope: envelope,
+        status: failureStatus,
+        groupId: groupId,
+        resultEncoder: resultEncoder,
         reason: 'max-retries-exhausted',
-        meta: {'error': error.toString()},
+        error: error,
+        stack: stack,
+        action: _terminalFailureDeadLetterAction,
       );
+      return const _TaskCompletion(
+        state: TaskState.failed,
+        terminalWriteOwned: true,
+      );
+    }
+  }
+
+  bool _hasTerminalFailureRecord(TaskStatus status) =>
+      status.meta[_terminalFailureEnvelopeKey] is Map;
+
+  Future<Envelope?> _finalizeTaskFailure(
+    TaskStatus status, {
+    required Delivery delivery,
+    required TaskPayloadEncoder resultEncoder,
+  }) async {
+    final marker = status.meta[_terminalFailureEnvelopeKey];
+    if (marker is! Map) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-invalid-marker',
+      );
+    }
+
+    // Catch only persisted marker decoding failures here. Callback and
+    // bookkeeping failures below must leave the delivery available for retry.
+    late final Map<String, Object?> markerMap;
+    late final Envelope envelope;
+    try {
+      markerMap = Map<String, Object?>.from(marker);
+    } on Object {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-invalid-marker',
+      );
+    }
+    final storedEnvelope = markerMap['envelope'] ?? marker;
+    if (storedEnvelope is! Map) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-invalid-envelope',
+      );
+    }
+    try {
+      envelope = Envelope.fromJson(Map<String, Object?>.from(storedEnvelope));
+      // Envelope.fromJson uses lazy casts for nested maps. Materialize them
+      // here so malformed keys remain validation failures, not callback-time
+      // exceptions that can strand the delivery.
+      Map<String, Object?>.from(envelope.args);
+      Map<String, String>.from(envelope.headers);
+      Map<String, Object?>.from(envelope.meta);
+    } on Object {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-invalid-envelope',
+      );
+    }
+
+    if (envelope.id != status.id || envelope.id != delivery.envelope.id) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-id-mismatch',
+      );
+    }
+    if (envelope.name != delivery.envelope.name) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-name-mismatch',
+      );
+    }
+    // Compare with the persisted failure, not the wakeup delivery: an older
+    // delivery can legitimately recover a later attempt's terminal bookkeeping.
+    if (envelope.attempt != status.attempt) {
+      return _settleInvalidTaskFailureRecovery(
+        delivery,
+        reason: 'terminal-failure-attempt-mismatch',
+      );
+    }
+    final phase = markerMap[_terminalFailureLifecycleKey];
+    // Done and effects-complete markers do not need the callback handler. This
+    // is intentionally checked before resolving handler compatibility so a
+    // deployment can recover settlement after a callback is removed.
+    if (phase == _terminalFailureDone) {
+      await _releaseUniqueLock(envelope);
+      await _acknowledgements.tryAcknowledge(
+        delivery,
+        envelope: envelope,
+        phase: 'completed terminal failure recovery',
+      );
+      return null;
+    }
+    final effectsComplete = phase == _terminalFailureEffectsComplete;
+    if (!effectsComplete) {
+      final handler = registry.resolve(envelope.name);
+      if (handler == null) {
+        return _settleInvalidTaskFailureRecovery(
+          delivery,
+          reason: 'terminal-failure-handler-unavailable',
+        );
+      }
+      if (handler is! TaskTerminalFailureHandler) {
+        return _settleInvalidTaskFailureRecovery(
+          delivery,
+          reason: 'terminal-failure-handler-incompatible',
+        );
+      }
+    }
+    await _completeTerminalFailure(
+      delivery: delivery,
+      envelope: envelope,
+      status: status,
+      groupId: envelope.headers['stem-group-id'],
+      resultEncoder: resultEncoder,
+      reason: 'max-retries-exhausted',
+      error: status.error ?? StateError('task failed'),
+      stack: StackTrace.empty,
+      action: markerMap[_terminalFailureActionKey] == _terminalFailureNackAction
+          ? _terminalFailureNackAction
+          : _terminalFailureDeadLetterAction,
+      effectsComplete: effectsComplete,
+    );
+    return envelope;
+  }
+
+  Future<Envelope?> _settleInvalidTaskFailureRecovery(
+    Delivery delivery, {
+    required String reason,
+  }) async {
+    // Do not include marker contents or task payload in broker diagnostics.
+    // Settlement errors intentionally propagate so the broker can retry them.
+    await _deadLetterOrDiscard(delivery, reason: reason);
+    await _releaseUniqueLock(delivery.envelope);
+    return null;
+  }
+
+  Future<void> _completeTerminalFailure({
+    required Delivery delivery,
+    required Envelope envelope,
+    required TaskStatus status,
+    required String? groupId,
+    required TaskPayloadEncoder resultEncoder,
+    required String reason,
+    required Object error,
+    required StackTrace stack,
+    required String action,
+    bool effectsComplete = false,
+  }) async {
+    final marker = status.meta[_terminalFailureEnvelopeKey];
+    if (marker is Map &&
+        marker[_terminalFailureLifecycleKey] == _terminalFailureDone) {
+      return;
+    }
+    if (!effectsComplete) {
+      final handler = registry.resolve(envelope.name);
+      if (handler is TaskTerminalFailureHandler) {
+        await (handler! as TaskTerminalFailureHandler).onTerminalFailure(
+          envelope,
+          status,
+        );
+      }
       GroupStatus? groupStatus;
       if (groupId != null) {
-        groupStatus = await backend.addGroupResult(groupId, failureStatus);
+        groupStatus = await backend.addGroupResult(groupId, status);
       }
-      if (groupStatus != null) {
-        await _maybeDispatchChord(groupStatus);
-      }
+      if (groupStatus != null) await _maybeDispatchChord(groupStatus);
       StemMetrics.instance.increment(
         'stem.tasks.failed',
         tags: {'task': envelope.name, 'queue': envelope.queue},
       );
       _failedCount += 1;
-      stemLogger.warning(
-        'Task {task} failed: {error}',
-        Context(
-          _deliveryLogContext(
-            envelope,
-            extra: {
-              'error': error.toString(),
-              'stack': stack.toString(),
-            },
-          ),
-        ),
-      );
       _emitEvent(
         WorkerEvent(
           type: WorkerEventType.failed,
@@ -2534,11 +2763,65 @@ class Worker {
         error: error,
         stackTrace: stack,
       );
-      return const _TaskCompletion(
-        state: TaskState.failed,
-        terminalWriteOwned: true,
+      // Keep the lease outstanding until all recoverable bookkeeping and
+      // linked dispatch have succeeded.
+      await _dispatchLinkedTasks(
+        envelope,
+        onSuccess: false,
+        propagateErrors: marker is Map,
+      );
+      await _releaseUniqueLock(envelope);
+      if (marker is Map) {
+        // Establish the durable boundary between effects and settlement.
+        // A crash before this write may repeat idempotent effects; a crash
+        // after it retries only settlement.
+        await _writeTerminalFailurePhase(
+          status,
+          marker,
+          _terminalFailureEffectsComplete,
+        );
+      }
+    }
+    // Effects are durably complete before permanent settlement. A settlement
+    // failure leaves this phase available for retry without repeating effects.
+    if (action == _terminalFailureDeadLetterAction) {
+      await _deadLetterOrDiscard(
+        delivery,
+        reason: reason,
+        meta: {'error': error.toString()},
+      );
+    } else {
+      await broker.nack(delivery, requeue: false);
+    }
+    if (marker is Map) {
+      await _writeTerminalFailurePhase(
+        status,
+        marker,
+        _terminalFailureDone,
       );
     }
+  }
+
+  Future<void> _writeTerminalFailurePhase(
+    TaskStatus status,
+    Map<Object?, Object?> marker,
+    String phase,
+  ) {
+    final retainedMarker = <String, Object?>{
+      ...Map<String, Object?>.from(marker),
+      _terminalFailureLifecycleKey: phase,
+    };
+    return backend.set(
+      status.id,
+      status.state,
+      payload: status.payload,
+      error: status.error,
+      attempt: status.attempt,
+      meta: {
+        ...status.meta,
+        _terminalFailureEnvelopeKey: retainedMarker,
+      },
+    );
   }
 
   /// Handles explicit retry requests surfaced from task handlers.
@@ -2549,6 +2832,7 @@ class Worker {
     TaskPayloadEncoder resultEncoder,
     TaskRetryRequest request,
     String? groupId,
+    TaskContext context,
   ) async {
     final outcome = _processor.classifyRetry(
       envelope,
@@ -2565,6 +2849,14 @@ class Worker {
           'worker': consumerName,
           'failedAt': stemNow().toIso8601String(),
           'retryExhausted': true,
+          if (handler is TaskTerminalFailureHandler)
+            _terminalFailureEnvelopeKey: {
+              'version': 1,
+              _terminalFailureLifecycleKey: _terminalFailurePending,
+              _terminalFailureActionKey: _terminalFailureNackAction,
+              'envelope': envelope.toJson(),
+              'context': context.terminalFailureContext,
+            },
         },
       );
       const failureError = TaskError(
@@ -2590,30 +2882,17 @@ class Worker {
           terminalWriteOwned: false,
         );
       }
-      await broker.nack(delivery, requeue: false);
-      GroupStatus? groupStatus;
-      if (groupId != null) {
-        groupStatus = await backend.addGroupResult(groupId, failureStatus);
-      }
-      if (groupStatus != null) {
-        await _maybeDispatchChord(groupStatus);
-      }
-      _emitEvent(
-        WorkerEvent(
-          type: WorkerEventType.failed,
-          envelope: envelope,
-          error: StateError('retry exhausted'),
-        ),
-      );
-      await _signals.taskFailed(
-        envelope,
-        _workerInfoSnapshot,
+      await _completeTerminalFailure(
+        delivery: delivery,
+        envelope: envelope,
+        status: failureStatus,
+        groupId: groupId,
+        resultEncoder: resultEncoder,
+        reason: 'retry-exhausted',
         error: StateError('retry exhausted'),
-        stackTrace: StackTrace.current,
+        stack: StackTrace.current,
+        action: _terminalFailureNackAction,
       );
-      if (_isTerminalState(TaskState.failed)) {
-        await _releaseUniqueLock(envelope);
-      }
       return const _TaskCompletion(
         state: TaskState.failed,
         terminalWriteOwned: true,
@@ -2626,6 +2905,15 @@ class Worker {
     final notBefore = retryEnvelope.notBefore!;
     await broker.nack(delivery, requeue: false);
     await _publishWithOptionalSigning(retryEnvelope);
+    StemTracer.instance.addEvent(
+      'stem.task.retry_scheduled',
+      attributes: {
+        'stem.task': envelope.name,
+        'stem.queue': envelope.queue,
+        'stem.task.attempt': envelope.attempt,
+        'stem.retry.delay_ms': delay.inMilliseconds,
+      },
+    );
 
     final retriedMeta = _statusMeta(
       envelope,
@@ -2706,6 +2994,15 @@ class Worker {
     final retryEnvelope = envelope.copyWith(notBefore: stemNow().add(backoff));
     await broker.nack(delivery, requeue: false);
     await _publishWithOptionalSigning(retryEnvelope);
+    StemTracer.instance.addEvent(
+      'stem.task.retry_scheduled',
+      attributes: {
+        'stem.task': envelope.name,
+        'stem.queue': envelope.queue,
+        'stem.task.attempt': envelope.attempt,
+        'stem.retry.delay_ms': backoff.inMilliseconds,
+      },
+    );
     final data = <String, Object?>{
       ...extra,
       if (!extra.containsKey('retryAfterMs'))
@@ -4090,7 +4387,8 @@ class Worker {
     Map<String, Object?> extra = const {},
   }) {
     final merged = <String, Object?>{
-      ...envelope.meta,
+      for (final entry in envelope.meta.entries)
+        if (entry.key != _terminalFailureEnvelopeKey) entry.key: entry.value,
       'task': envelope.name,
       'stem.task': envelope.name,
       'queue': envelope.queue,
@@ -4149,6 +4447,14 @@ class Worker {
       );
     }
     await broker.ack(delivery);
+    StemTracer.instance.addEvent(
+      revokeEntry == null ? 'stem.task.cancelled' : 'stem.task.revoked',
+      attributes: {
+        'stem.task': envelope.name,
+        'stem.queue': envelope.queue,
+        'stem.task.attempt': envelope.attempt,
+      },
+    );
     if (groupId != null) {
       await backend.addGroupResult(groupId, status);
     }
@@ -5097,21 +5403,21 @@ class WorkerEvent implements StemEvent {
   final Map<String, Object?>? data;
 
   /// Returns the decoded data value for [key], or `null` when absent.
-  T? dataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? dataValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded data value for [key], or [fallback] when absent.
-  T dataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T dataValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) return fallback;
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded data value for [key], throwing when absent.
-  T requiredDataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredDataValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) {
       throw StateError('WorkerEvent.data does not contain "$key".');
@@ -5120,7 +5426,7 @@ class WorkerEvent implements StemEvent {
   }
 
   /// Decodes the full data payload as a typed DTO with [codec].
-  T? dataAs<T>({required PayloadCodec<T> codec}) {
+  T? dataAs<T>({required Codec<T, Object?> codec}) {
     final payload = data;
     if (payload == null) return null;
     return codec.decode(payload);

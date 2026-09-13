@@ -217,6 +217,7 @@ class StemGroupResults {
       Model.findOrFail<$StemGroupResult>(id, connection: connection);
 
   static Future<List<$StemGroupResult>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemGroupResult>(connection: connection);
 
   static Future<int> count({String? connection}) =>

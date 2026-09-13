@@ -75,7 +75,10 @@ If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
 when the type already has `toJson()`. Use `TaskDefinition.versionedJson(...)`
 when the payload schema is expected to evolve and the published payload should
 persist an explicit `__stemPayloadVersion`. Use `TaskDefinition.codec(...)`
-when you need a custom `PayloadCodec<T>`. Task args still need to encode to a
+with any `Codec<T, Object?>`, including existing `PayloadCodec<T>` instances.
+See [authoring codecs](../workflows/context-and-serialization.md#authoring-codecs)
+for the standard Dart codec contract and a converter example.
+Task args still need to encode to a
 string-keyed map (typically `Map<String, dynamic>`) because they are published
 as JSON-shaped data. For low-level name-based enqueue APIs, use
 `enqueueVersionedJson(...)` for the same versioned DTO path.
@@ -277,6 +280,9 @@ With these practices in place, tasks can be retried safely and composed via
 chains, groups, and chords (see [Canvas Patterns](./canvas.md)).
 
 ## Task Payload Encoders
+
+This is the wire-level encoder registry, separate from the typed authoring
+`Codec<T, Object?>` used by task definitions and payload readers.
 
 Handlers often need to encrypt, compress, or otherwise transform arguments and
 results before they leave the process. Stem exposes `TaskPayloadEncoder` so you

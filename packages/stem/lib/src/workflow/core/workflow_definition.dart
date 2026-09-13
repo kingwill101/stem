@@ -158,7 +158,7 @@ class WorkflowDefinition<T extends Object?> {
     String? version,
     String? description,
     Map<String, Object?>? metadata,
-    PayloadCodec<T>? resultCodec,
+    Codec<T, Object?>? resultCodec,
     T Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) {
@@ -204,7 +204,7 @@ class WorkflowDefinition<T extends Object?> {
   factory WorkflowDefinition.flowCodec({
     required String name,
     required void Function(FlowBuilder builder) build,
-    required PayloadCodec<T> resultCodec,
+    required Codec<T, Object?> resultCodec,
     String? version,
     String? description,
     Map<String, Object?>? metadata,
@@ -307,7 +307,7 @@ class WorkflowDefinition<T extends Object?> {
     String? version,
     String? description,
     Map<String, Object?>? metadata,
-    PayloadCodec<T>? resultCodec,
+    Codec<T, Object?>? resultCodec,
     T Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) {
@@ -348,7 +348,7 @@ class WorkflowDefinition<T extends Object?> {
   factory WorkflowDefinition.scriptCodec({
     required String name,
     required WorkflowScriptBody<T> run,
-    required PayloadCodec<T> resultCodec,
+    required Codec<T, Object?> resultCodec,
     Iterable<WorkflowCheckpoint> checkpoints = const [],
     String? version,
     String? description,
@@ -535,7 +535,7 @@ class WorkflowDefinition<T extends Object?> {
 
   /// Builds a typed [WorkflowRef] backed by a DTO [paramsCodec].
   WorkflowRef<TParams, T> refCodec<TParams>({
-    required PayloadCodec<TParams> paramsCodec,
+    required Codec<TParams, Object?> paramsCodec,
   }) {
     return WorkflowRef<TParams, T>.codec(
       name: name,
@@ -814,7 +814,7 @@ class FlowBuilder {
     WorkflowStepKind kind = WorkflowStepKind.task,
     Iterable<String> taskNames = const [],
     Map<String, Object?>? metadata,
-    PayloadCodec<T>? valueCodec,
+    Codec<T, Object?>? valueCodec,
   }) {
     _steps.add(
       valueCodec == null

@@ -150,6 +150,99 @@ These profiles use the in-memory adapter so runtime and handler costs can be
 isolated. Adapter contention profiles should remain separate and use the
 adapter-specific benchmark beside the adapter package.
 
+### Headless DevTools Profiler CLI / MCP
+
+Use `devtools-profiler` to launch the workload and capture CPU samples and memory
+snapshots without a browser. Pass the workload directly, not `profile:job` (which
+compiles AOT) or `profile:job:vm` (which adds its own VM-service launch).
+
+```bash
+devtools-profiler run \
+  --cwd "$PWD" \
+  --artifact-dir build/stem-profile/devtools/inline-noop \
+  --method-table \
+  -- dart run benchmark/stem_job_profile.dart \
+  --tasks 5000 --warmup 500 --concurrency 4 \
+  --mode inline --workload noop --work-units 1 \
+  --output build/stem-profile/devtools/inline-noop-workload.json
+
+devtools-profiler summarize \
+  --hide-sdk --hide-runtime-helpers --method-table \
+  build/stem-profile/devtools/inline-noop
+```
+
+If the executable is not on `PATH`, an existing profiler checkout can be invoked
+without changing global package activation:
+
+```bash
+dart run /path/to/devtools/packages/devtools_profiler_cli/bin/devtools_profiler.dart \
+  run --cwd "$PWD" \
+  --artifact-dir build/stem-profile/devtools/inline-noop \
+  -- dart run benchmark/stem_job_profile.dart \
+  --tasks 5000 --warmup 500 --concurrency 4 --mode inline --workload noop
+```
+
+The same tool can serve an MCP client over local stdio with
+`devtools-profiler mcp`. Use the CLI when no MCP connection is configured; both
+expose the same profiling capabilities. No network upload is needed.
+
+Start with a repeated inline/no-op capture, then use the same task count,
+warmup, and concurrency for isolate/no-op and isolate/CPU captures. Inspect the
+coordinator and child isolates: selecting only the main isolate misses handler
+CPU. Keep all-isolate CPU percentages distinct from single-isolate percentages.
+
+The existing job workload reports measured-batch latency, but whole-session CPU
+captures also include startup, warmup, and shutdown. Its warmup task count does
+not clear profiler samples. Unattributed native samples must not be presented as
+Stem CPU, and memory snapshot deltas are not allocation totals or proof of leaks.
+Keep SDK frames in the raw capture; display filters help attribution but do not
+establish end-to-end speedups.
+
+Use separate unprofiled AOT repetitions to validate a proposed throughput change:
+
+```bash
+dart run tool/profile_job.dart \
+  --tasks 5000 --warmup 500 --concurrency 4 \
+  --mode inline --workload noop --work-units 1 \
+  --repetitions 5 --output build/stem-profile/aot-inline-noop.json
+```
+
+The profiler's VM-service capture is JIT, not AOT. Do not compare its throughput
+directly with AOT as if the difference were an optimization.
+
+### Workflow profiling
+
+Measure workflow orchestration separately from ordinary task dispatch:
+
+```bash
+devtools-profiler run \
+  --cwd "$PWD" \
+  --artifact-dir build/stem-profile/devtools/workflows \
+  -- dart run benchmark/stem_workflow_profile.dart \
+  --runs=1000 --warmup=100 --steps=5 --concurrency=4 \
+  --timeout-seconds=120 \
+  --output=build/stem-profile/devtools/workflows-workload.json
+```
+
+This uses standard `StemWorkflowApp.inMemory` and sequential script checkpoints,
+not the experimental workflow host. It verifies completed run IDs, results, and
+checkpoint execution counts. The measured phase includes run submission,
+checkpoint execution, result observation (100 ms polling), and validation; it is
+not a pure checkpoint-store microbenchmark. There are no synthetic sleeps or
+external services.
+
+JSON records UTC and `Timeline.now` boundaries for warmup and measured phases.
+`stem.workflow.profile.warmup` and `stem.workflow.profile.measured` are Dart VM
+`TimelineTask` markers, **not** automatic DevTools Profiler regions. Whole-session
+summaries still include startup/warmup; when analyzing raw VM `CpuSamples`, select
+samples whose `timestamp` falls between the measured `startedTimelineMicros` and
+`finishedTimelineMicros` before recomputing counts. Preserve `vmTag` attribution:
+runtime exception samples are not ordinary Dart execution samples.
+
+Use `--help` for argument details. `--hold-seconds` holds only after cleanup and
+is excluded from measured phase time. See `devtools_baseline.md` for initial
+captures, limitations, and the first optimization candidates.
+
 The SQLite adapter has a file-backed worker/broker/backend workload that
 exercises concurrent writer coordination:
 

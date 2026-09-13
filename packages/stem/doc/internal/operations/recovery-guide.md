@@ -27,6 +27,52 @@ If runs appear stuck:
 2. Verify workers are renewing leases (or failing fast and retrying).
 3. Restart workers to allow a fresh lease claim.
 
+## Workflow execution fencing and migration
+
+The optional `FencedWorkflowStore` capability gives each successful workflow
+claim a fresh `executionId`. The runtime captures that opaque token with the
+runner delivery and uses it for lease renewal, release, and failure recording.
+A stale runner therefore cannot renew or release a newer lease, or finalize a
+run after another execution has taken over. This is stronger than an
+owner-only lease check: a new claim or explicit resume/rewind invalidates the
+old execution identity.
+
+Failure recording has two deliberately different modes:
+
+- `terminal: false` records the error metadata only. The run status and lease
+  remain unchanged so the worker's retry policy can decide whether to retry.
+- Terminal failure records the error and transitions the run to failed, releasing
+  its lease. This operation is applied only when the captured `executionId` is
+  still current.
+
+When a terminal-failure callback is recovered after a delivery interruption,
+the runtime uses the trusted envelope and captured execution token persisted in
+task status. A custom or legacy store that does not implement
+`FencedWorkflowStore` cannot safely perform managed terminal failure; Stem logs
+that limitation and does not use an unsafe owner-only fallback. Operators must
+handle such failures with the store's own tooling or upgrade the store.
+
+Managed terminalization requires the execution identity captured by the
+failing delivery. A delivery that never acquired a claim cannot terminalize
+another execution's run.
+
+### Rolling upgrades
+
+For SQL-backed stores, apply the package's new workflow execution-fencing
+migration before enabling the new workers. SQLite adds `execution_id` to
+`wf_runs`; PostgreSQL adds `execution_id` and its execution index to
+`stem_workflow_runs`. Do not rely on stale-execution protection while old and
+new workers share a store: old workers do not carry or enforce execution
+identities. Drain or isolate old workers, apply the migration, then run the
+fenced workers. Independently opened or reopened SQLite stores also generate
+workflow run IDs as UUIDs, avoiding collisions between independent handles.
+
+Execution fencing covers the claim lease operations and managed terminal-failure
+finalization only. It does not condition every workflow write, provide
+exactly-once execution, guarantee all writes are atomic, or make external
+side effects safe. Use idempotency keys and application-level transactions for
+those guarantees.
+
 ## Inspecting groups and chords
 
 Each group or chord stores its state in the result backend.

@@ -177,7 +177,11 @@ Typed task results can use the same DTO convention.
 
 Workflow inputs, checkpoint values, and final workflow results can use the same
 DTO convention. The generated `PayloadCodec` persists the JSON form while
-workflow code continues to work with typed objects.
+workflow code continues to work with typed objects. Generated helpers remain
+`PayloadCodec` instances, compatible with the standard `Codec<T, Object?>`
+accepted by manual authoring APIs; no generated-code migration is required.
+See [authoring codecs](./context-and-serialization.md#authoring-codecs) for
+the distinction between standard codecs and the DTO conventions above.
 
 For lower-level generator details, see
 [`Core Concepts > stem_builder`](../core-concepts/stem-builder.md).

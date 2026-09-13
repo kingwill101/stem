@@ -11,7 +11,7 @@ import 'package:stem_postgres/src/database/models/workflow_models.dart';
 import 'package:uuid/uuid.dart';
 
 /// PostgreSQL-backed [WorkflowStore] implementation using ormed ORM.
-class PostgresWorkflowStore implements WorkflowStore {
+class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   PostgresWorkflowStore._(
     this._connections, {
     required this.namespace,
@@ -179,6 +179,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       createdAt: run.createdAt,
       updatedAt: run.updatedAt,
       ownerId: run.ownerId,
+      executionId: run.executionId,
       leaseExpiresAt: run.leaseExpiresAt,
       cancellationPolicy: run.cancellationPolicy != null
           ? WorkflowCancellationPolicy.fromJson(
@@ -341,6 +342,21 @@ class PostgresWorkflowStore implements WorkflowStore {
     final now = _clock.now().toUtc();
 
     await _connections.runInTransaction((ctx) async {
+      // Lock the run before the watcher so registration has the same lock
+      // order as resolution and fenced terminal failure.
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .lock('FOR UPDATE')
+          .first();
+
+      if (run == null ||
+          (run.status != WorkflowStatus.running.name &&
+              run.status != WorkflowStatus.suspended.name)) {
+        return;
+      }
+
       // Check if watcher already exists
       final existing = await ctx
           .query<$StemWorkflowWatcher>()
@@ -364,27 +380,18 @@ class PostgresWorkflowStore implements WorkflowStore {
         await ctx.repository<$StemWorkflowWatcher>().insert(watcher);
       }
 
-      // Update the associated run
-      final run = await ctx
-          .query<StemWorkflowRun>()
-          .whereEquals('id', runId)
-          .whereEquals('namespace', namespace)
-          .first();
-
-      if (run != null) {
-        final updates = StemWorkflowRunUpdateDto(
-          status: WorkflowStatus.suspended.name,
-          waitTopic: topic,
-          resumeAt: deadline,
-          suspensionData: jsonEncode(metadata),
-          updatedAt: now,
-        ).toMap();
-        updates['resume_at'] = deadline;
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
-      }
+      final updates = StemWorkflowRunUpdateDto(
+        status: WorkflowStatus.suspended.name,
+        waitTopic: topic,
+        resumeAt: deadline,
+        suspensionData: jsonEncode(metadata),
+        updatedAt: now,
+      ).toMap();
+      updates['resume_at'] = deadline;
+      await ctx.repository<StemWorkflowRun>().update(
+        updates,
+        where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+      );
     });
   }
 
@@ -508,6 +515,9 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['resume_at'] = null;
         updates['wait_topic'] = null;
         updates['suspension_data'] = data != null ? jsonEncode(data) : null;
+        updates['execution_id'] = null;
+        updates['owner_id'] = null;
+        updates['lease_expires_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
@@ -542,6 +552,7 @@ class PostgresWorkflowStore implements WorkflowStore {
           });
       return query.update({
         'ownerId': ownerId,
+        'executionId': null,
         'leaseExpiresAt': leaseExpiresAt,
         'updatedAt': now,
       });
@@ -563,6 +574,7 @@ class PostgresWorkflowStore implements WorkflowStore {
           .whereEquals('id', runId)
           .whereEquals('namespace', namespace)
           .whereEquals('status', WorkflowStatus.running.name)
+          .whereNull('executionId')
           .whereEquals('ownerId', ownerId);
       return query.update({
         'leaseExpiresAt': leaseExpiresAt,
@@ -580,12 +592,158 @@ class PostgresWorkflowStore implements WorkflowStore {
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .whereEquals('namespace', namespace)
+          .whereNull('executionId')
           .whereEquals('ownerId', ownerId)
           .update({
             'ownerId': null,
             'leaseExpiresAt': null,
             'updatedAt': now,
           });
+    });
+  }
+
+  @override
+  Future<WorkflowExecutionClaim?> claimRunExecution(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now().toUtc();
+    final leaseExpiresAt = now.add(leaseDuration);
+    final executionId = _uuid.v7();
+    final updated = await _connections.runInTransaction((ctx) {
+      return ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('status', WorkflowStatus.running.name)
+          .whereNull('waitTopic')
+          .where((PredicateBuilder<StemWorkflowRun> q) {
+            q
+              ..whereNull('leaseExpiresAt')
+              ..orWhere(
+                'leaseExpiresAt',
+                now,
+                PredicateOperator.lessThanOrEqual,
+              );
+          })
+          .update({
+            'ownerId': ownerId,
+            'executionId': executionId,
+            'leaseExpiresAt': leaseExpiresAt,
+            'updatedAt': now,
+          });
+    });
+    if (updated == 0) return null;
+    return WorkflowExecutionClaim(
+      runId: runId,
+      executionId: executionId,
+      ownerId: ownerId,
+      leaseExpiresAt: leaseExpiresAt,
+    );
+  }
+
+  @override
+  Future<bool> renewRunExecution(
+    String runId, {
+    required String executionId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now().toUtc();
+    final updated = await _connections.runInTransaction((ctx) {
+      return ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('status', WorkflowStatus.running.name)
+          .whereEquals('executionId', executionId)
+          .whereNotNull('leaseExpiresAt')
+          .where('leaseExpiresAt', now, PredicateOperator.greaterThan)
+          .update({
+            'leaseExpiresAt': now.add(leaseDuration),
+            'updatedAt': now,
+          });
+    });
+    return updated > 0;
+  }
+
+  @override
+  Future<void> releaseRunExecution(
+    String runId, {
+    required String executionId,
+  }) async {
+    final now = _clock.now().toUtc();
+    await _connections.runInTransaction((ctx) async {
+      await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('executionId', executionId)
+          .update({
+            'ownerId': null,
+            'leaseExpiresAt': null,
+            'updatedAt': now,
+          });
+    });
+  }
+
+  @override
+  Future<TerminalFailureResult> markFailedForExecution(
+    String runId, {
+    required String executionId,
+    required Object error,
+    required StackTrace stack,
+    bool terminal = true,
+  }) async {
+    final now = _clock.now().toUtc();
+    return _connections.runInTransaction((ctx) async {
+      // Serialize the eligibility check, write, and outcome classification
+      // with concurrent run mutations. Keep the entire decision inside the
+      // transaction that owns this row lock.
+      final current = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .lock('FOR UPDATE')
+          .first();
+      if (current == null ||
+          current.executionId != executionId ||
+          ![
+            WorkflowStatus.running.name,
+            WorkflowStatus.suspended.name,
+          ].contains(current.status)) {
+        if (current?.executionId == executionId &&
+            current?.status == WorkflowStatus.failed.name) {
+          return TerminalFailureResult.alreadyFailedForExecution;
+        }
+        return TerminalFailureResult.superseded;
+      }
+
+      final changed = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('executionId', executionId)
+          .whereIn('status', [
+            WorkflowStatus.running.name,
+            WorkflowStatus.suspended.name,
+          ])
+          .update({
+            if (terminal) 'status': WorkflowStatus.failed.name,
+            'lastError': jsonEncode({
+              'error': error.toString(),
+              'stack': stack.toString(),
+            }),
+            if (terminal) 'ownerId': null,
+            if (terminal) 'leaseExpiresAt': null,
+            if (terminal) 'resumeAt': null,
+            if (terminal) 'waitTopic': null,
+            'updatedAt': now,
+          });
+      if (changed > 0 && terminal) await _deleteWatcher(ctx, runId);
+      if (changed > 0) return TerminalFailureResult.applied;
+
+      return TerminalFailureResult.superseded;
     });
   }
 
@@ -656,6 +814,7 @@ class PostgresWorkflowStore implements WorkflowStore {
           .query<$StemWorkflowWatcher>()
           .whereEquals('topic', topic)
           .whereEquals('namespace', namespace)
+          .orderBy('runId')
           .limit(limit)
           .get();
 
@@ -667,7 +826,33 @@ class PostgresWorkflowStore implements WorkflowStore {
       final now = _clock.now();
       final nowUtc = now.toUtc();
 
-      for (final watcher in watchers) {
+      for (final candidate in watchers) {
+        // The initial watcher query is only a candidate scan. Lock and
+        // re-read the run first, then the exact watcher row. This prevents a
+        // resolver from reviving a run after markFailedForExecution has
+        // terminally failed it, and also observes a replacement watcher for
+        // the same run/topic.
+        final run = await ctx
+            .query<StemWorkflowRun>()
+            .whereEquals('id', candidate.runId)
+            .whereEquals('namespace', namespace)
+            .lock('FOR UPDATE')
+            .first();
+        if (run == null ||
+            run.status != WorkflowStatus.suspended.name ||
+            run.waitTopic != topic) {
+          continue;
+        }
+
+        final watcher = await ctx
+            .query<$StemWorkflowWatcher>()
+            .whereEquals('runId', candidate.runId)
+            .whereEquals('namespace', namespace)
+            .whereEquals('topic', topic)
+            .lock('FOR UPDATE')
+            .first();
+        if (watcher == null) continue;
+
         // Build metadata for resumption
         final data = _decodeMap(watcher.data);
         final metadata = Map<String, Object?>.from(data);
@@ -682,29 +867,20 @@ class PostgresWorkflowStore implements WorkflowStore {
           );
         metadata['deliveredAt'] = now.toIso8601String();
 
-        // Update run to mark as running with resolved metadata
-        final run = await ctx
-            .query<StemWorkflowRun>()
-            .whereEquals('id', watcher.runId)
-            .whereEquals('namespace', namespace)
-            .first();
-
-        if (run != null) {
-          final updates = StemWorkflowRunUpdateDto(
-            status: WorkflowStatus.running.name,
-            suspensionData: jsonEncode(metadata),
-            updatedAt: nowUtc,
-          ).toMap();
-          updates['wait_topic'] = null;
-          updates['resume_at'] = null;
-          await ctx.repository<StemWorkflowRun>().update(
-            updates,
-            where: StemWorkflowRunPartial(
-              id: watcher.runId,
-              namespace: namespace,
-            ),
-          );
-        }
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.running.name,
+          suspensionData: jsonEncode(metadata),
+          updatedAt: nowUtc,
+        ).toMap();
+        updates['wait_topic'] = null;
+        updates['resume_at'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(
+            id: watcher.runId,
+            namespace: namespace,
+          ),
+        );
 
         // Delete the watcher (resolved)
         await ctx.repository<$StemWorkflowWatcher>().delete(watcher);
@@ -781,6 +957,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['suspension_data'] = null;
         updates['wait_topic'] = null;
         updates['resume_at'] = null;
+        updates['execution_id'] = null;
         updates['owner_id'] = null;
         updates['lease_expires_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
@@ -854,16 +1031,20 @@ class PostgresWorkflowStore implements WorkflowStore {
           .first();
 
       if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.suspended.name,
+          suspensionData: jsonEncode({
+            'step': stepName,
+            'iteration': 0,
+            'iterationStep': stepName,
+          }),
+          updatedAt: _clock.now().toUtc(),
+        ).toMap();
+        updates['execution_id'] = null;
+        updates['owner_id'] = null;
+        updates['lease_expires_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
-          StemWorkflowRunUpdateDto(
-            status: WorkflowStatus.suspended.name,
-            suspensionData: jsonEncode({
-              'step': stepName,
-              'iteration': 0,
-              'iterationStep': stepName,
-            }),
-            updatedAt: _clock.now().toUtc(),
-          ),
+          updates,
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
@@ -965,6 +1146,15 @@ class PostgresWorkflowStore implements WorkflowStore {
   }
 
   Future<void> _deleteWatcher(QueryContext ctx, String runId) async {
+    // Legacy lifecycle methods call this before updating the run. Acquire
+    // the run lock first here too, so they cannot invert the resolver's
+    // run-then-watcher lock order.
+    await ctx
+        .query<StemWorkflowRun>()
+        .whereEquals('id', runId)
+        .whereEquals('namespace', namespace)
+        .lock('FOR UPDATE')
+        .first();
     final watcher = await ctx
         .query<$StemWorkflowWatcher>()
         .whereEquals('runId', runId)

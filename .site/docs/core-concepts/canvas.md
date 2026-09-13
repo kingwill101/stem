@@ -29,7 +29,11 @@ again with the same signatures.
 
 For heterogeneous transitions, use the typed fluent API. Each `then` accepts a
 `TaskDefinition` whose argument type must match the previous result type, and
-the final result is decoded into the last task's result type:
+the final result is decoded into the last task's result type.
+
+The definitions accept standard `Codec<T, Object?>` instances as well as
+`PayloadCodec<T>` conveniences. Task args still encode to string-keyed maps;
+see [authoring codecs](../workflows/context-and-serialization.md#authoring-codecs).
 
 ```dart
 final download = TaskDefinition<DownloadRequest, DownloadResult>.codec(

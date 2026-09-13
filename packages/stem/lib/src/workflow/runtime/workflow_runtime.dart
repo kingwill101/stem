@@ -27,13 +27,16 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:contextual/contextual.dart' show Context;
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/observability/logging.dart';
+import 'package:stem/src/observability/metrics.dart';
 import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
@@ -133,6 +136,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 
   Timer? _timer;
   Future<void>? _activePoll;
+  final Map<String, DateTime> _stepMetricStarts = {};
   late Future<void> _startFuture;
   int _pollGeneration = 0;
   bool _started = false;
@@ -205,6 +209,10 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         status: WorkflowRunStatus.running,
       ),
     );
+    StemMetrics.instance.increment(
+      'stem.workflows.started',
+      tags: {'workflow': name},
+    );
     await _enqueueRun(
       runId,
       workflow: name,
@@ -245,7 +253,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   Future<String> startWorkflowValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
@@ -508,7 +516,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) {
     final encoded = codec != null ? codec.encodeDynamic(value) : value;
     return emit(topic, _coerceEventPayload(topic, encoded));
@@ -603,12 +611,14 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     _timer?.cancel();
     _timer = null;
     await _activePoll;
+    _stepMetricStarts.clear();
   }
 
   /// Transitions a running workflow to [WorkflowStatus.cancelled].
   Future<void> cancelWorkflow(String runId) async {
     final state = await _store.get(runId);
     await _store.cancel(runId);
+    _stepMetricStarts.removeWhere((key, _) => key.startsWith('$runId:'));
     if (state != null) {
       await _signals.workflowRunCancelled(
         WorkflowRunPayload(
@@ -690,11 +700,22 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       }
     }
     // Attempt to claim the run lease before executing steps.
-    final claimed = await _store.claimRun(
+    final fencedStore = _store is FencedWorkflowStore
+        ? _store as FencedWorkflowStore
+        : null;
+    final executionClaim = await fencedStore?.claimRunExecution(
       runId,
       ownerId: _runtimeId,
       leaseDuration: runLeaseDuration,
     );
+    final claimed =
+        executionClaim != null ||
+        (fencedStore == null &&
+            await _store.claimRun(
+              runId,
+              ownerId: _runtimeId,
+              leaseDuration: runLeaseDuration,
+            ));
     if (!claimed) {
       // Reschedule the run so we don't ack and drop a redelivered task.
       throw TaskRetryRequest(
@@ -702,28 +723,77 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         maxRetries: _leaseConflictMaxRetries,
       );
     }
+    if (executionClaim != null && taskContext != null) {
+      taskContext.setTerminalFailureContext({
+        'runId': runId,
+        'workflow': runState.workflow,
+        'workflowExecutionId': executionClaim.executionId,
+      });
+    }
     final now = _clock.now();
     if (await _maybeCancelForPolicy(runState, now: now)) {
-      await _store.releaseRun(runId, ownerId: _runtimeId);
+      if (executionClaim != null) {
+        await fencedStore!.releaseRunExecution(
+          runId,
+          executionId: executionClaim.executionId,
+        );
+      } else {
+        await _store.releaseRun(runId, ownerId: _runtimeId);
+      }
       return;
     }
     final definition = _registry.lookup(runState.workflow);
     if (definition == null) {
-      await _store.markFailed(
-        runId,
-        StateError('Unknown workflow ${runState.workflow}'),
-        StackTrace.current,
-        terminal: true,
-      );
-      await _signals.workflowRunFailed(
-        WorkflowRunPayload(
-          runId: runId,
-          workflow: runState.workflow,
-          status: WorkflowRunStatus.failed,
-          metadata: {'error': 'Unknown workflow ${runState.workflow}'},
-        ),
-      );
-      await _store.releaseRun(runId, ownerId: _runtimeId);
+      // A worker task must leave terminalization to its terminal-failure
+      // callback.  In particular, notification failure can cause this task
+      // to be retried; terminalizing here would make those retries return
+      // before the callback can deliver the notification. Direct
+      // executeRun callers retain the historical synchronous behavior.
+      if (executionClaim != null && taskContext != null) {
+        await fencedStore!.releaseRunExecution(
+          runId,
+          executionId: executionClaim.executionId,
+        );
+        throw StateError('Unknown workflow ${runState.workflow}');
+      }
+      final failure = executionClaim != null
+          ? await fencedStore!.markFailedForExecution(
+              runId,
+              executionId: executionClaim.executionId,
+              error: StateError('Unknown workflow ${runState.workflow}'),
+              stack: StackTrace.current,
+            )
+          : null;
+      if (executionClaim == null) {
+        await _store.markFailed(
+          runId,
+          StateError('Unknown workflow ${runState.workflow}'),
+          StackTrace.current,
+          terminal: true,
+        );
+      }
+      if (failure != TerminalFailureResult.superseded) {
+        StemMetrics.instance.increment(
+          'stem.workflows.failed',
+          tags: {'workflow': runState.workflow},
+        );
+        await _signals.workflowRunFailed(
+          WorkflowRunPayload(
+            runId: runId,
+            workflow: runState.workflow,
+            status: WorkflowRunStatus.failed,
+            metadata: {'error': 'Unknown workflow ${runState.workflow}'},
+          ),
+        );
+      }
+      if (executionClaim != null) {
+        await fencedStore!.releaseRunExecution(
+          runId,
+          executionId: executionClaim.executionId,
+        );
+      } else {
+        await _store.releaseRun(runId, ownerId: _runtimeId);
+      }
       return;
     }
 
@@ -749,7 +819,12 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       }
 
       if (definition.isScript) {
-        await _executeScript(definition, runState, taskContext: taskContext);
+        await _executeScript(
+          definition,
+          runState,
+          taskContext: taskContext,
+          executionClaim: executionClaim,
+        );
         return;
       }
 
@@ -806,7 +881,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
           );
         }
         await _store.markRunning(runId, stepName: step.name);
-        await _extendLeases(taskContext, runId);
+        await _extendLeases(taskContext, runId, executionClaim);
         await _recordStepEvent(
           WorkflowStepEventType.started,
           runState,
@@ -834,7 +909,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
             metadata: const {'replayed': true},
           );
           cursor += 1;
-          await _extendLeases(taskContext, runId);
+          await _extendLeases(taskContext, runId, executionClaim);
           continue;
         }
 
@@ -874,40 +949,55 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         } on _WorkflowLeaseLost {
           return;
         } catch (error, stack) {
-          await _store.markFailed(runId, error, stack);
-          stemLogger.warning(
-            'Workflow {workflow} failed',
-            _runtimeLogContext(
-              workflow: runState.workflow,
-              runId: runId,
-              step: step.name,
-              extra: {
-                'error': error.toString(),
-                'stack': stack.toString(),
-                'runtimeId': _runtimeId,
-              },
-            ),
+          final failure = await _markFailed(
+            runId,
+            error,
+            stack,
+            executionClaim,
           );
-          await _recordStepEvent(
-            WorkflowStepEventType.failed,
-            runState,
-            step.name,
-            iteration: iteration,
-            error: error.toString(),
-          );
-          await _signals.workflowRunFailed(
-            WorkflowRunPayload(
-              runId: runId,
-              workflow: runState.workflow,
-              status: WorkflowRunStatus.failed,
-              step: step.name,
-              metadata: {'error': error.toString(), 'stack': stack.toString()},
-            ),
-          );
+          if (failure != TerminalFailureResult.superseded) {
+            stemLogger.warning(
+              'Workflow {workflow} failed',
+              _runtimeLogContext(
+                workflow: runState.workflow,
+                runId: runId,
+                step: step.name,
+                extra: {
+                  'error': error.toString(),
+                  'stack': stack.toString(),
+                  'runtimeId': _runtimeId,
+                },
+              ),
+            );
+            await _recordStepEvent(
+              WorkflowStepEventType.failed,
+              runState,
+              step.name,
+              iteration: iteration,
+              error: error.toString(),
+            );
+            await _signals.workflowRunFailed(
+              WorkflowRunPayload(
+                runId: runId,
+                workflow: runState.workflow,
+                status: WorkflowRunStatus.failed,
+                step: step.name,
+                metadata: {
+                  'error': error.toString(),
+                  'stack': stack.toString(),
+                },
+              ),
+            );
+          }
           rethrow;
         }
         final control = context.takeControl();
         if (control != null && control.type != FlowControlType.continueRun) {
+          // Suspension is not a step failure or completion. Drop the
+          // in-memory timer; a resumed execution gets a fresh start event.
+          _stepMetricStarts.remove(
+            '${runState.id}:${step.name}:$iteration',
+          );
           final metadata = <String, Object?>{
             'step': step.name,
             'iteration': iteration,
@@ -1032,7 +1122,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 
         final storedResult = step.encodeValue(result);
         await _store.saveStep(runId, checkpointName, storedResult);
-        await _extendLeases(taskContext, runId);
+        await _extendLeases(taskContext, runId, executionClaim);
         await _recordStepEvent(
           WorkflowStepEventType.completed,
           runState,
@@ -1051,6 +1141,15 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 
       final storedWorkflowResult = definition.encodeResult(previousResult);
       await _store.markCompleted(runId, storedWorkflowResult);
+      StemMetrics.instance.increment(
+        'stem.workflows.succeeded',
+        tags: {'workflow': runState.workflow},
+      );
+      StemMetrics.instance.recordDuration(
+        'stem.workflow.duration',
+        _clock.now().difference(runState.createdAt),
+        tags: {'workflow': runState.workflow},
+      );
       stemLogger.debug(
         'Workflow {workflow} completed',
         _runtimeLogContext(
@@ -1070,7 +1169,14 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     } on _WorkflowLeaseLost {
       return;
     } finally {
-      await _store.releaseRun(runId, ownerId: _runtimeId);
+      if (executionClaim != null) {
+        await fencedStore!.releaseRunExecution(
+          runId,
+          executionId: executionClaim.executionId,
+        );
+      } else {
+        await _store.releaseRun(runId, ownerId: _runtimeId);
+      }
     }
   }
 
@@ -1079,6 +1185,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     WorkflowDefinition definition,
     RunState runState, {
     TaskContext? taskContext,
+    WorkflowExecutionClaim? executionClaim,
   }) async {
     final script = definition.scriptBody;
     if (script == null) {
@@ -1118,6 +1225,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       runtime: this,
       runState: runState,
       taskContext: taskContext,
+      executionClaim: executionClaim,
       completedIterations: completedIterations,
       definition: definition,
       previousResult: previousResult,
@@ -1133,6 +1241,15 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       }
       final storedWorkflowResult = definition.encodeResult(result);
       await _store.markCompleted(runId, storedWorkflowResult);
+      StemMetrics.instance.increment(
+        'stem.workflows.succeeded',
+        tags: {'workflow': runState.workflow},
+      );
+      StemMetrics.instance.recordDuration(
+        'stem.workflow.duration',
+        _clock.now().difference(runState.createdAt),
+        tags: {'workflow': runState.workflow},
+      );
       stemLogger.debug(
         'Workflow {workflow} completed',
         _runtimeLogContext(
@@ -1154,30 +1271,41 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     } on _WorkflowScriptSuspended {
       return;
     } catch (error, stack) {
-      await _store.markFailed(runId, error, stack);
-      stemLogger.warning(
-        'Workflow {workflow} failed',
-        _runtimeLogContext(
-          workflow: runState.workflow,
-          runId: runId,
-          step: execution.lastStepName,
-          extra: {
-            'error': error.toString(),
-            'stack': stack.toString(),
-            'runtimeId': _runtimeId,
-          },
-        ),
+      final failure = await _markFailed(
+        runId,
+        error,
+        stack,
+        executionClaim,
       );
-      await _signals.workflowRunFailed(
-        WorkflowRunPayload(
-          runId: runId,
-          workflow: runState.workflow,
-          status: WorkflowRunStatus.failed,
-          step: execution.lastStepName,
-          metadata: {'error': error.toString(), 'stack': stack.toString()},
-        ),
-      );
+      if (failure != TerminalFailureResult.superseded) {
+        stemLogger.warning(
+          'Workflow {workflow} failed',
+          _runtimeLogContext(
+            workflow: runState.workflow,
+            runId: runId,
+            step: execution.lastStepName,
+            extra: {
+              'error': error.toString(),
+              'stack': stack.toString(),
+              'runtimeId': _runtimeId,
+            },
+          ),
+        );
+        await _signals.workflowRunFailed(
+          WorkflowRunPayload(
+            runId: runId,
+            workflow: runState.workflow,
+            status: WorkflowRunStatus.failed,
+            step: execution.lastStepName,
+            metadata: {'error': error.toString(), 'stack': stack.toString()},
+          ),
+        );
+      }
       rethrow;
+    } finally {
+      // Suspension exits the script before a completed/failed step can
+      // consume its start timestamp. Do not retain timers across executions.
+      _stepMetricStarts.removeWhere((key, _) => key.startsWith('$runId:'));
     }
   }
 
@@ -1191,6 +1319,43 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     String? error,
     Map<String, Object?>? metadata,
   }) async {
+    final tags = {'workflow': runState.workflow, 'step': stepName};
+    final metricKey = '${runState.id}:$stepName:${iteration ?? 0}';
+    switch (type) {
+      case WorkflowStepEventType.started:
+        StemMetrics.instance.increment(
+          'stem.workflow.steps.started',
+          tags: tags,
+        );
+        _stepMetricStarts[metricKey] = _clock.now();
+      case WorkflowStepEventType.completed:
+        final replayed = metadata?['replayed'] == true;
+        StemMetrics.instance.increment(
+          replayed
+              ? 'stem.workflow.steps.replayed'
+              : 'stem.workflow.steps.succeeded',
+          tags: tags,
+        );
+        final started = _stepMetricStarts.remove(metricKey);
+        if (!replayed && started != null) {
+          StemMetrics.instance.recordDuration(
+            'stem.workflow.step.duration',
+            _clock.now().difference(started),
+            tags: tags,
+          );
+        }
+      case WorkflowStepEventType.failed:
+        StemMetrics.instance.increment(
+          'stem.workflow.steps.failed',
+          tags: tags,
+        );
+        _stepMetricStarts.remove(metricKey);
+      case WorkflowStepEventType.retrying:
+        StemMetrics.instance.increment(
+          'stem.workflow.steps.retried',
+          tags: tags,
+        );
+    }
     try {
       await _introspection.recordStepEvent(
         WorkflowStepEvent(
@@ -1320,18 +1485,48 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   }
 
   /// Renews the workflow run lease and the broker visibility timeout.
-  Future<void> _extendLeases(TaskContext? context, String runId) async {
+  Future<void> _extendLeases(
+    TaskContext? context,
+    String runId,
+    WorkflowExecutionClaim? executionClaim,
+  ) async {
     if (runLeaseDuration.inMicroseconds > 0) {
-      final renewed = await _store.renewRunLease(
-        runId,
-        ownerId: _runtimeId,
-        leaseDuration: runLeaseDuration,
-      );
+      final renewed = executionClaim != null
+          ? await (_store as FencedWorkflowStore).renewRunExecution(
+              runId,
+              executionId: executionClaim.executionId,
+              leaseDuration: runLeaseDuration,
+            )
+          : await _store.renewRunLease(
+              runId,
+              ownerId: _runtimeId,
+              leaseDuration: runLeaseDuration,
+            );
       if (!renewed) {
         throw const _WorkflowLeaseLost();
       }
     }
     await _extendLease(context);
+  }
+
+  Future<TerminalFailureResult> _markFailed(
+    String runId,
+    Object error,
+    StackTrace stack,
+    WorkflowExecutionClaim? claim,
+  ) async {
+    if (claim != null) {
+      return (_store as FencedWorkflowStore).markFailedForExecution(
+        runId,
+        executionId: claim.executionId,
+        error: error,
+        stack: stack,
+        terminal: false,
+      );
+    } else {
+      await _store.markFailed(runId, error, stack);
+      return TerminalFailureResult.applied;
+    }
   }
 
   /// Generates a unique runtime identifier for workflow lease ownership.
@@ -1581,7 +1776,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 Map<String, Object?> _encodeWorkflowStartValue<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {
@@ -1608,10 +1803,80 @@ Map<String, Object?> _encodeWorkflowStartValue<T>(
 }
 
 /// Task handler that dispatches workflow run execution for a run id.
-class _WorkflowRunTaskHandler implements TaskHandler<void> {
+class _WorkflowRunTaskHandler
+    implements TaskHandler<void>, TaskTerminalFailureHandler {
   _WorkflowRunTaskHandler({required this.runtime});
 
   final WorkflowRuntime runtime;
+
+  @override
+  Future<void> onTerminalFailure(Envelope envelope, TaskStatus status) async {
+    final runId = envelope.args['runId'] as String?;
+    if (runId == null) return;
+    final state = await runtime._store.get(runId);
+    if (state == null) return;
+    final error = status.error;
+    final marker = status.meta['stem.terminalFailureEnvelope'];
+    final markerMap = marker is Map ? marker.cast<String, Object?>() : null;
+    final context =
+        markerMap?['context'] ?? markerMap?['workflowExecutionContext'];
+    final executionId = context is Map
+        ? context['workflowExecutionId']?.toString()
+        : null;
+    TerminalFailureResult? outcome;
+    final fencedStore = runtime._store is FencedWorkflowStore
+        ? runtime._store as FencedWorkflowStore
+        : null;
+    if (fencedStore != null) {
+      if (executionId == null ||
+          (context is Map && context['runId']?.toString() != runId) ||
+          (context is Map &&
+              context['workflow']?.toString() != state.workflow)) {
+        stemLogger.warning(
+          'Cannot finalize workflow failure without a matching execution claim',
+          runtime._runtimeLogContext(workflow: state.workflow, runId: runId),
+        );
+        return;
+      }
+      outcome = await fencedStore.markFailedForExecution(
+        runId,
+        executionId: executionId,
+        error: error?.message ?? 'Workflow runner failed',
+        stack: StackTrace.fromString(error?.stack ?? ''),
+      );
+      if (outcome == TerminalFailureResult.superseded) return;
+      final shouldNotify =
+          outcome == TerminalFailureResult.applied ||
+          outcome == TerminalFailureResult.alreadyFailedForExecution;
+      if (!shouldNotify) return;
+    } else {
+      stemLogger.warning(
+        'Legacy workflow store cannot safely finalize terminal failure',
+        runtime._runtimeLogContext(workflow: state.workflow, runId: runId),
+      );
+      return;
+    }
+    if (context is Map && context['workflowExecutionId'] == null) return;
+    // Metrics are owned by the transition, not by notification retries.
+    if (outcome == TerminalFailureResult.applied) {
+      StemMetrics.instance.increment(
+        'stem.workflows.failed',
+        tags: {'workflow': state.workflow},
+      );
+    }
+    await runtime._signals.workflowRunFailed(
+      WorkflowRunPayload(
+        runId: runId,
+        workflow: state.workflow,
+        status: WorkflowRunStatus.failed,
+        metadata: {
+          'error': error?.message,
+          'terminal': true,
+          'executionId': executionId,
+        },
+      ),
+    );
+  }
 
   @override
   String get name => workflowRunTaskName;
@@ -1644,6 +1909,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     required this.definition,
     required this.runState,
     required this.taskContext,
+    required this.executionClaim,
     required Map<String, int> completedIterations,
     required Object? previousResult,
     required int initialStepIndex,
@@ -1663,6 +1929,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   final WorkflowDefinition definition;
   final RunState runState;
   final TaskContext? taskContext;
+  final WorkflowExecutionClaim? executionClaim;
   final Map<String, int> _completedIterations;
   final WorkflowCancellationPolicy? policy;
   final WorkflowClock clock;
@@ -1726,7 +1993,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       );
     }
     await runtime._store.markRunning(runId, stepName: name);
-    await runtime._extendLeases(taskContext, runId);
+    await runtime._extendLeases(taskContext, runId, executionClaim);
     await runtime._recordStepEvent(
       WorkflowStepEventType.started,
       runState,
@@ -1764,7 +2031,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
         _completedIterations[name] = 1;
       }
       _stepIndex += 1;
-      await runtime._extendLeases(taskContext, runId);
+      await runtime._extendLeases(taskContext, runId, executionClaim);
       return decodedCached as T;
     }
 
@@ -1824,7 +2091,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
 
     final storedResult = declaredCheckpoint?.encodeValue(result) ?? result;
     await runtime._store.saveStep(runId, checkpointName, storedResult);
-    await runtime._extendLeases(taskContext, runId);
+    await runtime._extendLeases(taskContext, runId, executionClaim);
     await runtime._recordStepEvent(
       WorkflowStepEventType.completed,
       runState,
@@ -2023,7 +2290,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -2308,7 +2575,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -2330,7 +2597,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
 Map<String, Object?> _encodeWorkflowStepValue<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {

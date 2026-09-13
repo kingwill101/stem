@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Require Stem `>=0.5.0 <1.0.0`, allowing later pre-1.0 releases.
+
 ## 0.3.1
 
 - Recover the unpublished 0.3.0 release using the corrected publishing workflow.

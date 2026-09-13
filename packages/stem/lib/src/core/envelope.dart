@@ -229,7 +229,7 @@ class Envelope {
   final Map<String, Object?> args;
 
   /// Decodes the full task args payload as a typed DTO with [codec].
-  T argsAs<T>({required PayloadCodec<T> codec}) {
+  T argsAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(args);
   }
 
@@ -288,7 +288,7 @@ class Envelope {
   final Map<String, Object?> meta;
 
   /// Decodes the full envelope metadata payload as a typed DTO with [codec].
-  T metaAs<T>({required PayloadCodec<T> codec}) {
+  T metaAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(meta);
   }
 

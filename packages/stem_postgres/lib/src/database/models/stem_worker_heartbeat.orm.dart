@@ -273,6 +273,7 @@ class StemWorkerHeartbeats {
   }) => Model.findOrFail<$StemWorkerHeartbeat>(id, connection: connection);
 
   static Future<List<$StemWorkerHeartbeat>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemWorkerHeartbeat>(connection: connection);
 
   static Future<int> count({String? connection}) =>

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
@@ -21,7 +22,7 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
   ///
   /// When [codec] is provided, the stored durable payload is decoded through
   /// that codec before being returned.
-  T? takeResumeValue<T>({PayloadCodec<T>? codec}) {
+  T? takeResumeValue<T>({Codec<T, Object?>? codec}) {
     final payload = takeResumeData();
     if (payload == null) return null;
     if (codec != null) return codec.decodeDynamic(payload) as T;
@@ -123,7 +124,7 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
     String topic, {
     DateTime? deadline,
     Map<String, Object?>? data,
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) {
     final payload = takeResumeValue<T>(codec: codec);
     if (payload != null) {
@@ -192,7 +193,7 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
     required String topic,
     DateTime? deadline,
     Map<String, Object?>? data,
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) async {
     final payload = takeResumeValue<T>(codec: codec);
     if (payload != null) {

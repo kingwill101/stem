@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
@@ -1267,7 +1268,7 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
@@ -1420,7 +1421,7 @@ class _RecordingTaskEnqueuer implements TaskEnqueuer {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
@@ -1442,7 +1443,7 @@ class _RecordingTaskEnqueuer implements TaskEnqueuer {
 Map<String, Object?> _encodeWorkflowTaskArgs<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {

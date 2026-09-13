@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:stem/src/core/contracts.dart';
@@ -52,7 +53,7 @@ class _CapturingEnqueuer implements TaskEnqueuer {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -74,7 +75,7 @@ class _CapturingEnqueuer implements TaskEnqueuer {
 Map<String, Object?> _encodeInvocationTaskArgs<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {
@@ -155,7 +156,7 @@ class _CapturingWorkflowEventEmitter implements WorkflowEventEmitter {
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) async {
     final encoded = codec != null ? codec.encode(value) : value;
     payloads.add(Map<String, Object?>.from(encoded! as Map));

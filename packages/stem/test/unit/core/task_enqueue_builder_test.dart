@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -243,7 +245,7 @@ class _RecordingTaskEnqueuer implements TaskEnqueuer {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,

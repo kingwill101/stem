@@ -5,9 +5,10 @@ import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_sqlite/src/connection.dart';
 import 'package:stem_sqlite/src/models/models.dart';
+import 'package:uuid/uuid.dart';
 
 /// SQLite-backed implementation of [WorkflowStore].
-class SqliteWorkflowStore implements WorkflowStore {
+class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   SqliteWorkflowStore._(
     this._connections,
     this._clock, {
@@ -56,7 +57,7 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   /// Namespace used to scope workflow data.
   final String namespace;
-  int _idCounter = 0;
+  final Uuid _uuid = const Uuid();
 
   Map<String, Object?> _prepareSuspensionData(
     Map<String, Object?>? source, {
@@ -92,7 +93,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final now = _clock.now().toUtc();
     final id = (runId != null && runId.trim().isNotEmpty)
         ? runId.trim()
-        : 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
+        : 'wf-${_uuid.v7()}';
     final policyJson = cancellationPolicy == null || cancellationPolicy.isEmpty
         ? null
         : jsonEncode(cancellationPolicy.toJson());
@@ -160,6 +161,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       createdAt: run.createdAt,
       updatedAt: run.updatedAt,
       ownerId: run.ownerId,
+      executionId: run.executionId,
       leaseExpiresAt: run.leaseExpiresAt,
       cancellationPolicy: cancellationPolicyRaw.isNotEmpty
           ? WorkflowCancellationPolicy.fromJson(cancellationPolicyRaw)
@@ -487,6 +489,9 @@ class SqliteWorkflowStore implements WorkflowStore {
           suspensionData: data != null ? jsonEncode(data) : null,
           updatedAt: now,
         ).toMap();
+        updates['execution_id'] = null;
+        updates['owner_id'] = null;
+        updates['lease_expires_at'] = null;
         updates['resume_at'] = null;
         updates['wait_topic'] = null;
         if (data == null) {
@@ -526,11 +531,148 @@ class SqliteWorkflowStore implements WorkflowStore {
           });
       return query.update({
         'ownerId': ownerId,
+        'executionId': null,
         'leaseExpiresAt': leaseExpiresAt,
         'updatedAt': now,
       });
     });
     return updated > 0;
+  }
+
+  @override
+  Future<WorkflowExecutionClaim?> claimRunExecution(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now().toUtc();
+    final expiresAt = now.add(leaseDuration);
+    final executionId = _uuid.v4();
+    return _connections.runInTransaction((ctx) async {
+      final updated = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('status', WorkflowStatus.running.name)
+          .whereNull('waitTopic')
+          .where((PredicateBuilder<StemWorkflowRun> q) {
+            q
+              ..whereNull('leaseExpiresAt')
+              ..orWhere(
+                'leaseExpiresAt',
+                now,
+                PredicateOperator.lessThanOrEqual,
+              );
+          })
+          .update({
+            'ownerId': ownerId,
+            'executionId': executionId,
+            'leaseExpiresAt': expiresAt,
+            'updatedAt': now,
+          });
+      if (updated == 0) return null;
+      return WorkflowExecutionClaim(
+        runId: runId,
+        executionId: executionId,
+        ownerId: ownerId,
+        leaseExpiresAt: expiresAt,
+      );
+    });
+  }
+
+  @override
+  Future<bool> renewRunExecution(
+    String runId, {
+    required String executionId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now().toUtc();
+    final expiresAt = now.add(leaseDuration);
+    return _connections.runInTransaction((ctx) async {
+      final updated = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('status', WorkflowStatus.running.name)
+          .whereEquals('executionId', executionId)
+          .whereNotNull('ownerId')
+          .where('leaseExpiresAt', now, PredicateOperator.greaterThan)
+          .update({'leaseExpiresAt': expiresAt, 'updatedAt': now});
+      return updated > 0;
+    });
+  }
+
+  @override
+  Future<void> releaseRunExecution(
+    String runId, {
+    required String executionId,
+  }) async {
+    final now = _clock.now().toUtc();
+    await _connections.runInTransaction((ctx) async {
+      await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('executionId', executionId)
+          .update({
+            'ownerId': null,
+            'leaseExpiresAt': null,
+            'updatedAt': now,
+          });
+    });
+  }
+
+  @override
+  Future<TerminalFailureResult> markFailedForExecution(
+    String runId, {
+    required String executionId,
+    required Object error,
+    required StackTrace stack,
+    bool terminal = true,
+  }) async {
+    final now = _clock.now().toUtc();
+    return _connections.runInTransaction((ctx) async {
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+      if (run == null || run.executionId != executionId) {
+        return TerminalFailureResult.superseded;
+      }
+      if (run.status == WorkflowStatus.failed.name) {
+        return TerminalFailureResult.alreadyFailedForExecution;
+      }
+      if (run.status == WorkflowStatus.completed.name ||
+          run.status == WorkflowStatus.cancelled.name) {
+        return TerminalFailureResult.superseded;
+      }
+      final updates = StemWorkflowRunUpdateDto(
+        status: terminal ? WorkflowStatus.failed.name : null,
+        lastError: jsonEncode({
+          'error': error.toString(),
+          'stack': stack.toString(),
+        }),
+        updatedAt: now,
+      ).toMap();
+      if (terminal) {
+        updates['owner_id'] = null;
+        updates['lease_expires_at'] = null;
+        updates['resume_at'] = null;
+        updates['wait_topic'] = null;
+      }
+      final changed = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('executionId', executionId)
+          .whereEquals('status', run.status)
+          .update(updates);
+      if (changed > 0 && terminal) await _deleteWatcher(ctx, runId);
+      return changed > 0
+          ? TerminalFailureResult.applied
+          : TerminalFailureResult.superseded;
+    });
   }
 
   @override
@@ -547,7 +689,8 @@ class SqliteWorkflowStore implements WorkflowStore {
           .whereEquals('id', runId)
           .whereEquals('namespace', namespace)
           .whereEquals('status', WorkflowStatus.running.name)
-          .whereEquals('ownerId', ownerId);
+          .whereEquals('ownerId', ownerId)
+          .whereNull('executionId');
       return query.update({
         'leaseExpiresAt': leaseExpiresAt,
         'updatedAt': now,
@@ -565,6 +708,7 @@ class SqliteWorkflowStore implements WorkflowStore {
           .whereEquals('id', runId)
           .whereEquals('namespace', namespace)
           .whereEquals('ownerId', ownerId)
+          .whereNull('executionId')
           .update({
             'ownerId': null,
             'leaseExpiresAt': null,
@@ -836,6 +980,9 @@ class SqliteWorkflowStore implements WorkflowStore {
       ).toMap();
       updates['wait_topic'] = null;
       updates['resume_at'] = null;
+      updates['owner_id'] = null;
+      updates['lease_expires_at'] = null;
+      updates['execution_id'] = null;
       await ctx.repository<StemWorkflowRun>().update(
         updates,
         where: StemWorkflowRunPartial(id: runId, namespace: namespace),

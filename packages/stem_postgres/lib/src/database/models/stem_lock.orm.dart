@@ -146,6 +146,7 @@ class StemLocks {
       Model.findOrFail<$StemLock>(id, connection: connection);
 
   static Future<List<$StemLock>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemLock>(connection: connection);
 
   static Future<int> count({String? connection}) =>

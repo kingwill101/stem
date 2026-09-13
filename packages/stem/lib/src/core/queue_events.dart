@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
@@ -47,7 +48,7 @@ class QueueCustomEvent implements StemEvent {
   final Map<String, Object?> meta;
 
   /// Decodes the full event metadata payload with [codec].
-  T metaAs<T>({required PayloadCodec<T> codec}) {
+  T metaAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(meta);
   }
 
@@ -79,12 +80,12 @@ class QueueCustomEvent implements StemEvent {
   }
 
   /// Returns the decoded payload value for [key], or `null` when it is absent.
-  T? payloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? payloadValue<T>(String key, {Codec<T, Object?>? codec}) {
     return payload.value<T>(key, codec: codec);
   }
 
   /// Decodes the entire payload as a typed DTO with [codec].
-  T payloadAs<T>({required PayloadCodec<T> codec}) {
+  T payloadAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(payload);
   }
 
@@ -116,12 +117,12 @@ class QueueCustomEvent implements StemEvent {
   }
 
   /// Returns the decoded payload value for [key], or [fallback] when absent.
-  T payloadValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T payloadValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded payload value for [key], throwing when it is absent.
-  T requiredPayloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredPayloadValue<T>(String key, {Codec<T, Object?>? codec}) {
     return payload.requiredValue<T>(key, codec: codec);
   }
 
@@ -235,7 +236,7 @@ class QueueEventsProducer {
     String queue,
     String eventName,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
   }) {
@@ -279,7 +280,7 @@ Map<String, Object?> _encodeQueueEventValue<T>(
   String queue,
   String eventName,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {

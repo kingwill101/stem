@@ -157,6 +157,7 @@ class StemBroadcastAcks {
   }) => Model.findOrFail<$StemBroadcastAck>(id, connection: connection);
 
   static Future<List<$StemBroadcastAck>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemBroadcastAck>(connection: connection);
 
   static Future<int> count({String? connection}) =>

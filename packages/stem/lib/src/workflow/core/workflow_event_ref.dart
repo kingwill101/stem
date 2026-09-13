@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 
 /// Shared typed workflow-event dispatch surface used by apps and runtimes.
@@ -7,7 +9,7 @@ abstract interface class WorkflowEventEmitter {
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   });
 
   /// Emits a typed external event using a [WorkflowEventRef].
@@ -30,7 +32,7 @@ class WorkflowEventRef<T> {
   /// expose `toJson()` and `Type.fromJson(...)`.
   factory WorkflowEventRef.codec({
     required String topic,
-    required PayloadCodec<T> codec,
+    required Codec<T, Object?> codec,
   }) {
     return WorkflowEventRef<T>(
       topic: topic,
@@ -142,7 +144,7 @@ class WorkflowEventRef<T> {
   final String topic;
 
   /// Optional codec for encoding and decoding event payloads.
-  final PayloadCodec<T>? codec;
+  final Codec<T, Object?>? codec;
 }
 
 /// Convenience helpers for dispatching typed workflow events.

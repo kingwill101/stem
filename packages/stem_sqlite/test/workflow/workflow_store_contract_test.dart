@@ -26,5 +26,9 @@ void main() {
     },
   );
   runWorkflowStoreContractTests(adapterName: 'sqlite', factory: sqliteFactory);
+  runWorkflowExecutionFenceContractTests(
+    adapterName: 'sqlite',
+    factory: sqliteFactory,
+  );
   runWorkflowScriptFacadeTests(adapterName: 'sqlite', factory: sqliteFactory);
 }

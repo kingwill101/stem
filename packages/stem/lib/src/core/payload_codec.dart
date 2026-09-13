@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:stem/src/core/task_payload_encoder.dart';
 
@@ -44,7 +45,12 @@ class PayloadVersionRegistry<T> {
 ///
 /// This author-facing codec layer is used by generated workflow/task helpers to
 /// lower richer Dart DTOs into the existing durable wire format.
-class PayloadCodec<T> {
+///
+/// This is a standard [Codec]. Stem's typed payload APIs also accept custom
+/// `Codec<T, Object?>` implementations; these constructors provide convenient
+/// callback, JSON-map, and schema-version adapters without changing stored
+/// data.
+class PayloadCodec<T> extends Codec<T, Object?> {
   /// Creates a payload codec from explicit encode/decode callbacks.
   const PayloadCodec({
     required Object? Function(T value) encode,
@@ -256,6 +262,7 @@ class PayloadCodec<T> {
   }
 
   /// Converts a typed value into a durable payload representation.
+  @override
   Object? encode(T value) {
     final encoded = _encode(value);
     final version = _jsonVersion;
@@ -268,6 +275,7 @@ class PayloadCodec<T> {
   }
 
   /// Reconstructs a typed value from a durable payload representation.
+  @override
   T decode(Object? payload) {
     final decode = _decode;
     if (decode != null) {
@@ -288,6 +296,12 @@ class PayloadCodec<T> {
     return decodeMap(_payloadJsonMap(payload, _typeName ?? '$T'));
   }
 
+  @override
+  Converter<T, Object?> get encoder => _PayloadConverter(encode);
+
+  @override
+  Converter<Object?, T> get decoder => _PayloadConverter(decode);
+
   /// Converts an erased author-facing value into a durable payload.
   Object? encodeDynamic(Object? value) {
     if (value == null) return null;
@@ -299,6 +313,37 @@ class PayloadCodec<T> {
     if (payload == null) return null;
     return decode(payload);
   }
+}
+
+/// Adapts standard codecs to Stem's erased, nullable payload boundaries.
+///
+/// Legacy [PayloadCodec] overrides retain control of both null values and
+/// erased representations. Standard-only codecs use the original default
+/// null guards and typed encode cast. Ordinary [Codec.encode] and
+/// [Codec.decode] calls are unaffected.
+extension PayloadCodecErasedDispatch<T> on Codec<T, Object?> {
+  /// Encodes an erased value, preserving legacy override dispatch.
+  Object? encodeDynamic(Object? value) {
+    final codec = this;
+    if (codec is PayloadCodec<T>) return codec.encodeDynamic(value);
+    return value == null ? null : encode(value as T);
+  }
+
+  /// Decodes an erased payload, preserving legacy override dispatch.
+  Object? decodeDynamic(Object? payload) {
+    final codec = this;
+    if (codec is PayloadCodec<T>) return codec.decodeDynamic(payload);
+    return payload == null ? null : decode(payload);
+  }
+}
+
+class _PayloadConverter<S, T> extends Converter<S, T> {
+  const _PayloadConverter(this._convert);
+
+  final T Function(S value) _convert;
+
+  @override
+  T convert(S input) => _convert(input);
 }
 
 Object? _encodeJsonPayload<T>(T value) {
@@ -357,7 +402,7 @@ int _payloadVersion(
   );
 }
 
-/// Bridges a [PayloadCodec] into the existing [TaskPayloadEncoder] contract.
+/// Bridges a typed [Codec] into the existing [TaskPayloadEncoder] contract.
 class CodecTaskPayloadEncoder<T> extends TaskPayloadEncoder {
   /// Creates a task payload encoder backed by a typed [codec].
   const CodecTaskPayloadEncoder({required this.idValue, required this.codec});
@@ -366,7 +411,7 @@ class CodecTaskPayloadEncoder<T> extends TaskPayloadEncoder {
   final String idValue;
 
   /// Typed codec used to encode and decode payloads.
-  final PayloadCodec<T> codec;
+  final Codec<T, Object?> codec;
 
   @override
   String get id => idValue;

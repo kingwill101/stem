@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
@@ -25,6 +27,7 @@ class RunState {
     this.suspensionData,
     this.updatedAt,
     this.ownerId,
+    this.executionId,
     this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
@@ -46,6 +49,7 @@ class RunState {
       suspensionData: (json['suspensionData'] as Map?)?.cast<String, Object?>(),
       updatedAt: _dateFromJson(json['updatedAt']),
       ownerId: json['ownerId']?.toString(),
+      executionId: json['executionId']?.toString(),
       leaseExpiresAt: _dateFromJson(json['leaseExpiresAt']),
       cancellationPolicy: WorkflowCancellationPolicy.fromJson(
         json['cancellationPolicy'],
@@ -75,7 +79,7 @@ class RunState {
       WorkflowRunRuntimeMetadata.stripFromParams(params);
 
   /// Decodes the workflow params payload with [codec].
-  TParams paramsAs<TParams>({required PayloadCodec<TParams> codec}) {
+  TParams paramsAs<TParams>({required Codec<TParams, Object?> codec}) {
     return codec.decode(workflowParams);
   }
 
@@ -119,7 +123,7 @@ class RunState {
   final Object? result;
 
   /// Decodes the final result payload with [codec].
-  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+  TResult? resultAs<TResult>({required Codec<TResult, Object?> codec}) {
     final stored = result;
     if (stored == null) return null;
     return codec.decode(stored);
@@ -165,7 +169,7 @@ class RunState {
   final Map<String, Object?>? lastError;
 
   /// Decodes the last error payload with [codec], when present.
-  TError? lastErrorAs<TError>({required PayloadCodec<TError> codec}) {
+  TError? lastErrorAs<TError>({required Codec<TError, Object?> codec}) {
     final payload = lastError;
     if (payload == null) return null;
     return codec.decode(payload);
@@ -211,6 +215,11 @@ class RunState {
   /// Identifier of the worker/runtime currently leasing this run, if any.
   final String? ownerId;
 
+  /// Identity of the latest fenced execution, retained after lease release.
+  ///
+  /// Null for legacy claims or after an explicit superseding resume/rewind.
+  final String? executionId;
+
   /// Timestamp when the current lease expires, if any.
   final DateTime? leaseExpiresAt;
 
@@ -221,7 +230,7 @@ class RunState {
   final Map<String, Object?>? cancellationData;
 
   /// Decodes the runtime metadata payload with [codec].
-  TRuntime runtimeAs<TRuntime>({required PayloadCodec<TRuntime> codec}) {
+  TRuntime runtimeAs<TRuntime>({required Codec<TRuntime, Object?> codec}) {
     return codec.decode(runtimeMetadata.toJson());
   }
 
@@ -257,7 +266,7 @@ class RunState {
 
   /// Decodes the cancellation payload with [codec], when present.
   TCancellation? cancellationDataAs<TCancellation>({
-    required PayloadCodec<TCancellation> codec,
+    required Codec<TCancellation, Object?> codec,
   }) {
     final payload = cancellationData;
     if (payload == null) return null;
@@ -343,7 +352,7 @@ class RunState {
 
   /// Decodes the suspension payload with [codec], when present.
   TPayload? suspensionPayloadAs<TPayload>({
-    required PayloadCodec<TPayload> codec,
+    required Codec<TPayload, Object?> codec,
   }) {
     final stored = suspensionPayload;
     if (stored == null) return null;
@@ -430,6 +439,7 @@ class RunState {
     Object? suspensionData = _unset,
     DateTime? updatedAt,
     Object? ownerId = _unset,
+    Object? executionId = _unset,
     Object? leaseExpiresAt = _unset,
     WorkflowCancellationPolicy? cancellationPolicy,
     Map<String, Object?>? cancellationData,
@@ -450,6 +460,9 @@ class RunState {
     final resolvedLeaseExpiresAt = leaseExpiresAt == _unset
         ? this.leaseExpiresAt
         : leaseExpiresAt as DateTime?;
+    final resolvedExecutionId = executionId == _unset
+        ? this.executionId
+        : executionId as String?;
     return RunState(
       id: id,
       workflow: workflow,
@@ -464,6 +477,7 @@ class RunState {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       ownerId: resolvedOwnerId,
+      executionId: resolvedExecutionId,
       leaseExpiresAt: resolvedLeaseExpiresAt,
       cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
       cancellationData: cancellationData ?? this.cancellationData,
@@ -486,6 +500,7 @@ class RunState {
       'suspensionData': suspensionData,
       'updatedAt': updatedAt?.toIso8601String(),
       'ownerId': ownerId,
+      'executionId': executionId,
       'leaseExpiresAt': leaseExpiresAt?.toIso8601String(),
       'cancellationPolicy': cancellationPolicy?.toJson(),
       'cancellationData': cancellationData,

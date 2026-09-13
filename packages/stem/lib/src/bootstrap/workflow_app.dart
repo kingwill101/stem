@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
@@ -159,7 +160,7 @@ class StemWorkflowApp
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -276,7 +277,7 @@ class StemWorkflowApp
   Future<String> startWorkflowValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
@@ -384,7 +385,7 @@ class StemWorkflowApp
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) {
     return runtime.emitValue(topic, value, codec: codec);
   }

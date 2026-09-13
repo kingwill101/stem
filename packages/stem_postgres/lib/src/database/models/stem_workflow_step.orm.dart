@@ -122,6 +122,7 @@ class StemWorkflowSteps {
   }) => Model.findOrFail<$StemWorkflowStep>(id, connection: connection);
 
   static Future<List<$StemWorkflowStep>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemWorkflowStep>(connection: connection);
 
   static Future<int> count({String? connection}) =>

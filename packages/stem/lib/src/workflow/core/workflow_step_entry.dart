@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 
 /// Persisted step checkpoint metadata for a workflow run.
@@ -33,7 +35,7 @@ class WorkflowStepEntry {
   final DateTime? completedAt;
 
   /// Decodes the persisted checkpoint value with [codec], when present.
-  TValue? valueAs<TValue>({required PayloadCodec<TValue> codec}) {
+  TValue? valueAs<TValue>({required Codec<TValue, Object?> codec}) {
     final stored = value;
     if (stored == null) return null;
     return codec.decode(stored);

@@ -319,6 +319,7 @@ class StemRegistryBuilder implements Builder {
         );
       }
       _ensureUniqueWorkflowStepNames(classElement, steps, label: 'step');
+      _validateFlowStepParameterContract(classElement, steps);
       workflows.add(
         _WorkflowInfo.flow(
           name: workflowName,
@@ -400,6 +401,15 @@ class StemRegistryBuilder implements Builder {
         ),
       );
     }
+
+    _ensureUniqueLogicalNames(
+      'workflow',
+      workflows.map((workflow) => (workflow.name, workflow.className)),
+    );
+    _ensureUniqueLogicalNames(
+      'task',
+      tasks.map((task) => (task.name, task.function)),
+    );
 
     final outputId = buildStep.allowedOutputs.single;
     final fileName = input.pathSegments.last;
@@ -684,6 +694,7 @@ class StemRegistryBuilder implements Builder {
     }
     return _ValueParameterInfo(
       name: parameter.displayName,
+      type: type,
       typeCode: _typeCode(type),
       payloadCodecTypeCode: codecTypeCode,
     );
@@ -881,7 +892,9 @@ class StemRegistryBuilder implements Builder {
   }
 
   static DartType _extractAsyncValueType(DartType returnType) {
-    if (returnType is InterfaceType && returnType.typeArguments.isNotEmpty) {
+    if (returnType is InterfaceType &&
+        (returnType.isDartAsyncFuture || returnType.isDartAsyncFutureOr) &&
+        returnType.typeArguments.isNotEmpty) {
       return returnType.typeArguments.first;
     }
     return returnType;
@@ -1038,6 +1051,59 @@ void _ensureUniqueWorkflowStepNames(
     element: classElement,
   );
 }
+
+void _ensureUniqueLogicalNames(
+  String label,
+  Iterable<(String, String)> names,
+) {
+  final sources = <String, List<String>>{};
+  for (final entry in names) {
+    sources.putIfAbsent(entry.$1, () => <String>[]).add(entry.$2);
+  }
+  final duplicates = sources.entries.where((entry) => entry.value.length > 1);
+  if (duplicates.isEmpty) return;
+  final details = duplicates
+      .map((entry) => '"${entry.key}" from ${entry.value.join(', ')}')
+      .join('; ');
+  throw InvalidGenerationSourceError(
+    'Duplicate logical $label names in this library: $details.',
+  );
+}
+
+void _validateFlowStepParameterContract(
+  ClassElement classElement,
+  List<_WorkflowStepInfo> steps,
+) {
+  if (steps.length < 2) return;
+  final first = {
+    for (final parameter in steps.first.valueParameters)
+      parameter.name: parameter,
+  };
+  for (final step in steps.skip(1)) {
+    for (final parameter in step.valueParameters) {
+      final starterParameter = first[parameter.name];
+      if (starterParameter == null ||
+          !classElement.library.typeSystem.isSubtypeOf(
+            starterParameter.type,
+            parameter.type,
+          ) ||
+          _codecBaseType(starterParameter.payloadCodecTypeCode) !=
+              _codecBaseType(parameter.payloadCodecTypeCode)) {
+        throw InvalidGenerationSourceError(
+          'Workflow ${classElement.displayName} step "${step.name}" '
+          'parameter "${parameter.name}" is not present with a compatible '
+          'type and payload representation in the first step '
+          '"${steps.first.name}". The flow starter '
+          'contract is defined by the first step parameters.',
+          element: classElement,
+        );
+      }
+    }
+  }
+}
+
+String? _codecBaseType(String? typeCode) =>
+    typeCode?.replaceFirst(RegExp(r'\?$'), '');
 
 Future<void> _diagnoseScriptCheckpointPatterns(
   BuildStep buildStep,
@@ -1269,11 +1335,13 @@ class _TaskBinding {
 class _ValueParameterInfo {
   const _ValueParameterInfo({
     required this.name,
+    required this.type,
     required this.typeCode,
     required this.payloadCodecTypeCode,
   });
 
   final String name;
+  final DartType type;
   final String typeCode;
   final String? payloadCodecTypeCode;
 }
@@ -1309,7 +1377,7 @@ class _RegistryEmitter {
       '// ignore_for_file: unused_element, unnecessary_lambdas, omit_local_variable_types, unused_import',
     );
     buffer.writeln();
-    buffer.writeln("part of '$fileName';");
+    buffer.writeln('part of ${_string(fileName)};');
     return buffer.toString();
   }
 
@@ -1370,7 +1438,7 @@ class _RegistryEmitter {
       '// ignore_for_file: unused_element, unnecessary_lambdas, omit_local_variable_types, unused_import',
     );
     buffer.writeln();
-    buffer.writeln("part of '$partOfFile';");
+    buffer.writeln('part of ${_string(partOfFile)};');
     buffer.writeln();
 
     _emitPayloadCodecs(buffer);
@@ -1393,10 +1461,30 @@ class _RegistryEmitter {
     for (final entry in payloadCodecSymbols.entries) {
       final typeCode = entry.key;
       final symbol = entry.value;
+      if (typeCode.endsWith('?')) {
+        final valueType = _nonNullableTypeCode(typeCode);
+        buffer.writeln(
+          '  static final PayloadCodec<$typeCode> $symbol = (() {',
+        );
+        buffer.writeln('    const codec = PayloadCodec<$valueType>.json(');
+        buffer.writeln('      decode: $valueType.fromJson,');
+        buffer.writeln('      typeName: ${_string(typeCode)},');
+        buffer.writeln('    );');
+        buffer.writeln('    return PayloadCodec<$typeCode>(');
+        buffer.writeln(
+          '      encode: (value) => value == null ? null : codec.encode(value),',
+        );
+        buffer.writeln(
+          '      decode: (payload) => payload == null ? null : codec.decode(payload),',
+        );
+        buffer.writeln('    );');
+        buffer.writeln('  })();');
+        continue;
+      }
       buffer.writeln('  static final PayloadCodec<$typeCode> $symbol =');
       buffer.writeln('      PayloadCodec<$typeCode>.json(');
       buffer.writeln(
-        '        decode: $typeCode.fromJson,',
+        '        decode: ${_nonNullableTypeCode(typeCode)}.fromJson,',
       );
       buffer.writeln(
         '        typeName: ${_string(typeCode)},',
@@ -1928,7 +2016,8 @@ class _RegistryEmitter {
       );
       buffer.writeln('  $definition.handler(');
       buffer.writeln(
-        '    entrypoint: (context, args) => ${_qualify(task.importAlias, task.function)}($callArgs),',
+        '    entrypoint: (context, args) => Future<${task.resultTypeCode}>.sync(() => '
+        '${_qualify(task.importAlias, task.function)}($callArgs)),',
       );
       buffer.writeln(
         '    executionMode: TaskExecutionMode.${task.runInIsolate ? 'isolate' : 'inline'},',
@@ -2037,7 +2126,8 @@ class _RegistryEmitter {
         'Future<Object?> $adapterName(TaskInvocationContext context, Map<String, Object?> args) async {',
       );
       buffer.writeln(
-        '  return await Future<Object?>.value(${_qualify(task.importAlias, task.function)}($callArgs));',
+        '  return await Future<Object?>.sync(() => '
+        '${_qualify(task.importAlias, task.function)}($callArgs));',
       );
       buffer.writeln('}');
       buffer.writeln();
@@ -2300,7 +2390,7 @@ String _dartObjectToCode(DartObject object) {
   if (reader.isBool) return reader.boolValue.toString();
   if (reader.isInt) return reader.intValue.toString();
   if (reader.isDouble) return reader.doubleValue.toString();
-  if (reader.isString) return jsonEncode(reader.stringValue);
+  if (reader.isString) return _string(reader.stringValue);
   if (reader.isList) {
     final items = reader.listValue.map(_dartObjectToCode).join(', ');
     return '[$items]';
@@ -2364,4 +2454,13 @@ String _reviveToCode(Revivable revived) {
   return 'const ${source.fragment}$accessor($argsCode)';
 }
 
-String _string(String value) => jsonEncode(value);
+String _nonNullableTypeCode(String typeCode) {
+  return typeCode.endsWith('?')
+      ? typeCode.substring(0, typeCode.length - 1)
+      : typeCode;
+}
+
+/// Encodes a value as a Dart string literal. JSON's double-quoted literals
+/// are valid Dart, but `$` must additionally be escaped to avoid interpolation
+/// in generated source.
+String _string(String value) => jsonEncode(value).replaceAll(r'$', r'\$');
