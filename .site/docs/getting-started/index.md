@@ -4,58 +4,30 @@ sidebar_position: 0
 slug: /getting-started
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+Choose the path that matches the thing you are building:
 
-This track is the recommended path for anyone new to Stem. Follow the pages in
-order—each builds on the previous one and links to deeper references when you
-want to explore further.
+- **A hosted workflow** — a typed, long-running process with checkpoints,
+  durable waits, and a result handle. Start with [Introduction](./intro.md),
+  then [Quick Start](./quick-start.md).
+- **A generated task** — a background job submitted to a queue and run by a
+  worker. Start with [First Steps](./first-steps.md), then
+  [Choosing a backend](./choosing-a-backend.md).
 
-- **[Introduction](./intro.md)** – Prerequisites, the feature tour, and how the onboarding journey is structured.
-- **[Quick Start](./quick-start.md)** – Create your first Stem tasks, enqueue with delays/priorities, and inspect results in memory.
-- **[First Steps](./first-steps.md)** – Bootstrap an in-memory `StemApp`, enqueue from a producer, and read results.
-- **[Connect to Infrastructure](./developer-environment.md)** – Run Redis/Postgres locally, configure brokers/backends, experiment with routing and canvas patterns.
-- **[Observe & Operate](./observability-and-ops.md)** – Enable OpenTelemetry export, inspect workers/queues/DLQ via CLI, and wire lifecycle signals.
-- **[Prepare for Production](./production-checklist.md)** – Apply signing/TLS, deploy with systemd or CLI multi-process tooling, and run quality gates before launch.
-- **[Troubleshooting](./troubleshooting.md)** – Common errors and quick fixes while onboarding.
-- **[Stem vs BullMQ](../comparisons/stem-vs-bullmq.md)** – Canonical feature mapping with `✓/~ /✗` parity semantics.
+Both paths use the same Stem runtime and can live in one application. Once the
+basics work, continue to [Next Steps](./next-steps.md) or the detailed
+[Workflows](../workflows/index.md) guide.
 
-Once you complete the journey, continue with the in-depth material under
-[Workflows](../workflows/index.md), [Core Concepts](../core-concepts/index.md),
-and [Workers](../workers/index.md).
+## Before you begin
 
-## Preview: a full Stem pipeline in one file
+This documentation follows the current source, targeting Dart 3.13 or later.
+Published releases can lag behind it. In particular, the hosted quick start
+requires a package version that exports `WorkflowHost`; use the matching
+release documentation or a local checkout if your resolved version lacks it.
+See the [source-vs-published note](./intro.md#source-checkouts-and-published-packages).
 
-Use this example as a mental model for how tasks, workers, and brokers fit
-together.
-
-<Tabs>
-<TabItem value="task-definition" label="Define the task handler">
-
-```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-task-definition
-
+```bash
+dart --version
+dart create my_stem_app
+cd my_stem_app
+dart pub add stem
 ```
-
-</TabItem>
-<TabItem value="task-options" label="Configure retries and rate limits">
-
-```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-task-options
-
-```
-
-</TabItem>
-<TabItem value="runtime-setup" label="Create the broker, backend, and worker">
-
-```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-runtime-setup
-
-```
-
-</TabItem>
-<TabItem value="enqueue" label="Start the worker and enqueue tasks">
-
-```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-enqueue
-
-```
-
-</TabItem>
-</Tabs>

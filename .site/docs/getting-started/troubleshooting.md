@@ -5,301 +5,71 @@ sidebar_position: 7
 slug: /getting-started/troubleshooting
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+Start with the symptom, then check the component that owns that state. The
+optional `stem_cli` package must be configured with the application's adapter
+context.
 
-Common issues when getting started with Stem and how to resolve them.
+## Producer succeeds, but no worker runs the task
 
-## Worker starts but no tasks are processed
+**Check:** compare broker connection, namespace, queue, routing, task name, and
+serialization/registry configuration in both processes. Check worker
+heartbeats and broker connectivity.
 
-Checklist:
+**Remedy:** use the same configuration and register the task in the worker.
+With the CLI, run `stem worker ping`, `stem worker status`, and
+`stem observe queues` after configuring its context.
 
-- Make sure the producer and worker share the same broker URL.
-- Confirm the worker is subscribed to the queue you are enqueueing into.
-- If routing is enabled, verify the routing file and default queue.
+## Tasks are repeatedly retried
 
-<Tabs>
-<TabItem value="task" label="Minimal task handler">
+**Check:** inspect the exception and `task-retry` signal. Determine whether the
+failure is transient or permanent, and check the task retry policy and count.
 
-```dart title="lib/troubleshooting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/troubleshooting.dart#troubleshooting-task
+**Remedy:** repair transient dependencies; otherwise bound the retry budget or
+let the task reach the DLQ. Make external effects idempotent because delivery
+is at least once.
 
-```
+## A task is in the DLQ
 
-</TabItem>
-<TabItem value="bootstrap" label="Worker + broker bootstrap">
+**Check:** inspect payload, task name/version, decode/signature error, and the
+first failure. Malformed bytes are not repaired by retrying them.
 
-```dart title="lib/troubleshooting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/troubleshooting.dart#troubleshooting-bootstrap
+**Remedy:** deploy a compatible handler or correct the producer, then replay a
+small verified sample. Use `stem dlq list` and `stem dlq show`; confirm replay
+or purge flags with the installed CLI's `--help`.
 
-```
+## A workflow is waiting or does not resume
 
-</TabItem>
-<TabItem value="enqueue" label="Producer enqueue">
+**Check:** inspect the run and waiter topic. The emitted topic must exactly
+match the topic passed to `awaitEvent`; verify the run is still waiting and the
+payload is serializable.
 
-```dart title="lib/troubleshooting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/troubleshooting.dart#troubleshooting-enqueue
+**Remedy:** emit the matching event through the workflow API/CLI, or cancel the
+run according to its policy. A suspended workflow is not necessarily failed.
+See [workflow troubleshooting](../workflows/troubleshooting.md).
 
-```
+## A worker is redelivering or duplicates appear
 
-</TabItem>
-<TabItem value="results" label="Read results from the backend">
+**Check:** compare broker visibility timeout, worker lease duration, renewal
+cadence, handler duration, and shutdown mode. Look for lease-renewal failures
+and process crashes.
 
-```dart title="lib/troubleshooting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/troubleshooting.dart#troubleshooting-results
+**Remedy:** size leases for the operation, keep renewal ahead of expiry, and
+make side effects idempotent. Built-in terminal-result arbitration cannot make
+an external HTTP call, email, or mobile execution exactly once.
 
-```
+## TLS or signing fails
 
-</TabItem>
-</Tabs>
+**Check:** verify certificate paths and hostname validation, then verify
+`STEM_SIGNING_ALGORITHM`, active key, and matching HMAC/Ed25519 key sets.
 
-Helpful commands:
+**Remedy:** deploy CA/public keys to verifiers and rotate with overlap. Use
+`STEM_TLS_ALLOW_INSECURE=true` only for short local diagnosis, then remove it.
+Never print secrets while debugging.
 
-```bash
-stem worker stats --json
-stem worker inspect
-stem observe queues
-```
+## Namespace or backend state is missing
 
-## Routing file fails to parse
+**Check:** compare namespace and adapter endpoint exactly, including database
+and schema. Confirm durable stores are reachable and migrated.
 
-Checklist:
-
-- Validate the routing file path and format (YAML/JSON).
-- Confirm `STEM_ROUTING_CONFIG` points at the file you expect.
-- Confirm the routing config or routing registry matches the task names
-  referenced in the file.
-- If you use queue priorities, ensure the broker supports them.
-
-<Tabs>
-<TabItem value="load" label="Load routing file">
-
-```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-load
-
-```
-
-</TabItem>
-<TabItem value="inline" label="Inline routing config">
-
-```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-inline
-
-```
-
-</TabItem>
-</Tabs>
-
-Helpful commands:
-
-```bash
-stem routing dump
-stem routing dump --json
-stem routing dump --sample
-```
-
-## Missing or misconfigured result backend
-
-Symptoms: `stem observe` fails or task results never appear.
-
-Checklist:
-
-- Set `STEM_RESULT_BACKEND_URL` for any workflow that needs stored results.
-- Ensure the backend URL uses the correct scheme (`redis://`, `postgres://`).
-- Confirm the worker is configured with the same result backend.
-
-<Tabs>
-<TabItem value="redis" label="Redis result backend">
-
-```dart title="lib/persistence.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-redis
-
-```
-
-</TabItem>
-<TabItem value="postgres" label="Postgres result backend">
-
-```dart title="lib/persistence.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-postgres
-
-```
-
-</TabItem>
-</Tabs>
-
-Helpful commands:
-
-```bash
-stem health --backend "$STEM_RESULT_BACKEND_URL"
-stem observe workers
-stem observe queues
-```
-
-## TLS or signing failures
-
-Symptoms: health checks fail or tasks land in the DLQ with signature errors.
-
-Checklist:
-
-- Verify `STEM_TLS_*` variables are set on every component that connects.
-- Confirm `STEM_SIGNING_KEYS`/`STEM_SIGNING_PUBLIC_KEYS` match across producers and workers.
-- Ensure `STEM_SIGNING_ACTIVE_KEY` is set and present in the key list.
-- Check DLQ entries for `signature-invalid` reasons.
-
-<Tabs>
-<TabItem value="signed" label="Signed enqueue">
-
-```dart title="lib/producer.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-signed
-
-```
-
-</TabItem>
-<TabItem value="shared-signer" label="Shared signer config">
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-config
-
-```
-
-</TabItem>
-<TabItem value="runtime" label="Stem + worker signing setup">
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-runtime
-
-```
-
-</TabItem>
-</Tabs>
-
-Helpful commands:
-
-```bash
-stem health \
-  --broker "$STEM_BROKER_URL" \
-  --backend "$STEM_RESULT_BACKEND_URL"
-
-stem dlq list --queue <queue>
-stem dlq show --queue <queue> --id <task-id>
-```
-
-## Namespace mismatch
-
-Symptoms: CLI sees no data or control commands return empty responses.
-
-Checklist:
-
-- Ensure all processes (producer, worker, CLI) use the same namespace string.
-- For workers, confirm `STEM_WORKER_NAMESPACE` matches your CLI `--namespace`.
-
-<Tabs>
-<TabItem value="broker" label="Broker + backend namespace">
-
-```dart title="lib/namespaces.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-broker-backend
-
-```
-
-</TabItem>
-<TabItem value="worker" label="Worker namespace">
-
-```dart title="lib/namespaces.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-worker
-
-```
-
-</TabItem>
-</Tabs>
-
-Helpful commands:
-
-```bash
-stem worker stats --namespace "stem"
-stem worker ping --namespace "stem"
-```
-
-## Migrations or schema errors
-
-Checklist:
-
-- Run the migration commands shipped with the adapter (Redis/Postgres).
-- Ensure your store URLs point to the migrated database/schema.
-- Set `STEM_SCHEDULE_STORE_URL` before running schedule commands.
-
-Helpful commands:
-
-```bash
-stem schedule list
-```
-
-## DLQ stalls or poison-pill tasks
-
-Checklist:
-
-- Inspect DLQ entries and replay only after fixing the root cause.
-- For repeat failures, consider lowering retries or adding task-level guards.
-
-Helpful commands:
-
-```bash
-stem dlq list --queue <queue>
-stem dlq show --queue <queue> --id <task-id>
-stem dlq replay --queue <queue> --id <task-id>
-```
-
-Example enqueue that will land in the DLQ:
-
-```dart title="bin/producer.dart" file=<rootDir>/../packages/stem/example/dlq_sandbox/bin/producer.dart#dlq-producer-enqueue
-```
-
-## Control commands return no replies
-
-This usually means the control broadcast channel is not being consumed.
-
-Checklist:
-
-- Ensure the worker is running and connected to the same broker.
-- If you use a custom namespace, pass `--namespace` to CLI commands.
-- Verify that the broker supports broadcast/control channels.
-
-Helpful commands:
-
-```bash
-stem worker stats --json
-stem observe workers
-```
-
-## Task retries instantly or too quickly
-
-Checklist:
-
-- Confirm your task’s `TaskOptions` (`maxRetries`, `visibilityTimeout`).
-- Ensure the broker supports delayed deliveries (`notBefore`).
-- Check broker clock drift if delays feel inconsistent.
-
-<Tabs>
-<TabItem value="task-options" label="Retry-related task options">
-
-```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-task-options
-
-```
-
-</TabItem>
-<TabItem value="strategy" label="Jittered retry strategy">
-
-```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-strategy
-
-```
-
-</TabItem>
-</Tabs>
-
-## Connection refused
-
-Checklist:
-
-- Verify Redis/Postgres is running and reachable.
-- Confirm the URL scheme (`redis://`, `postgres://`).
-- Ensure Docker ports are mapped (`-p 6379:6379`, `-p 5432:5432`).
-
-Helpful commands:
-
-```bash
-stem health \
-  --broker "$STEM_BROKER_URL" \
-  --backend "$STEM_RESULT_BACKEND_URL" \
-```
-
-## Still stuck?
-
-- Review the [Observability & Ops](./observability-and-ops.md) guide for
-  heartbeats, DLQ inspection, and control commands.
-- Check the runnable examples under `packages/stem/example/`.
+**Remedy:** correct shared configuration and run the adapter's documented
+migrations. Missing telemetry does not imply missing task state.

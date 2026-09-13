@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- Ship a package skill for workflow host ownership and Flutter lifecycle handling.
 - Require Dart `>=3.13.0 <4.0.0` through a compatible Flutter SDK.
 - Require Stem `>=0.5.0 <1.0.0`, allowing later pre-1.0 releases.
 - Added Flutter bindings for core `WorkflowHost` and `HostedRun`, including

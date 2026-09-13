@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- Ship a package skill for generated tasks, workflows, and explicit codec bindings.
 - Require Dart `>=3.13.0 <4.0.0` and exercise primary-constructor DTOs in the
   compiler-backed consumer fixture.
 - Validate codec representation provenance across flow steps and reject nullable

@@ -4,7 +4,7 @@ title: How It Works
 
 Stem workflows are built on top of the regular Stem queue runtime, but they are
 not just “tasks that sleep”. They add a workflow store, durable suspension
-state, and orchestration-specific runtime metadata.
+state, checkpoint/journal data, and orchestration-specific runtime metadata.
 
 ## Runtime components
 
@@ -20,7 +20,9 @@ state, and orchestration-specific runtime metadata.
 
 Each workflow run is executed by an internal task named `stem.workflow.run`.
 That task is delivered on the orchestration queue, claimed by a worker, and
-then delegated into the workflow runtime.
+then delegated into the workflow runtime. A sleep or event wait persists its
+continuation before returning control to the worker; resumption is a new
+delivery, not a kept-alive invocation.
 
 This is why workflow logs show task lifecycle lines alongside workflow runtime
 lines.
@@ -37,7 +39,9 @@ Stem keeps materialized workflow state in the workflow store:
 - runtime metadata such as queue and serialization info
 
 That model is simpler to query from dashboards and store adapters, while still
-allowing durable resume and recovery.
+allowing durable resume and recovery. On replay, the runtime reads completed
+checkpoints/journal entries and advances from the first unfinished boundary.
+User code outside those boundaries can run again.
 
 ## Manifests
 
@@ -62,9 +66,10 @@ Workflow runs are lease-based.
 
 Operational guidance:
 
-- keep workflow lease duration at or above the broker visibility timeout
-- renew leases before visibility or lease expiry
+- renew leases before expiry when the store supports renewal
 - keep clocks in sync across workers
+- make checkpoint side effects idempotent: delivery and retry are at least once
 
-Those constraints determine whether recovery is clean under crashes or network
-delays.
+When a lease expires, another worker may take over. Fencing prevents the stale
+owner from committing a later state transition, but it cannot undo an external
+side effect that happened before the crash.

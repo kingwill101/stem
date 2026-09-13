@@ -1,50 +1,67 @@
 ---
-title: Troubleshooting
+title: Workflow Troubleshooting
 ---
-
-These are the workflow-specific issues you are most likely to hit first.
 
 ## The workflow never starts
 
-Check:
+**Check:** confirm `await workflowApp.start()` runs, the workflow is
+registered, a worker consumes the orchestration queue, and the durable
+workflow store is reachable.
 
-- the app was started with `await workflowApp.start()`
-- a worker is subscribed to the workflow orchestration queue
-- the workflow name is registered in `flows:` or `scripts:`
+**Remedy:** correct bootstrap/registration and start a worker with the same
+store and namespace. This is task delivery, not a journal retry.
 
-## A normal task inside the workflow never runs
+## A regular task inside a workflow never runs
 
-The workflow worker may only be subscribed to the `workflow` queue. If the
-workflow enqueues regular tasks, make sure some worker also consumes the target
-task queue such as `default`.
+**Check:** orchestration and regular tasks may use different queues. Confirm a
+worker consumes the target queue and has the task registered.
+
+**Remedy:** start the appropriate task worker or correct routing. Do not
+increase workflow `maxAttempts` to compensate for an unsubscribed queue.
+
+## A step keeps failing
+
+**Check:** distinguish queue redelivery/task retry from `WorkflowRetryPolicy`.
+`maxAttempts` includes the first logical step attempt and survives restart;
+queue deliveries do not reset it.
+
+**Remedy:** fix the step or dependency and choose a bounded journal policy. If
+it exhausts, handle `WorkflowStepRetryExhausted`; do not replay the queue
+indefinitely.
+
+## Compensation keeps failing
+
+**Check:** compensation has its own journal namespace and attempt budget.
+Inspect `WorkflowCompensationRetryExhausted` and its persisted failure.
+
+**Remedy:** repair or reconcile external state, then use the supported
+workflow operation. Compensation is not the forward-step budget.
 
 ## Resume events do nothing
 
-Check:
+**Check:** the topic passed to `WorkflowRuntime.emit`/`emitValue` must match
+`awaitEvent`. Confirm the run is waiting, the store is reachable, and the
+payload is a string-keyed JSON-like value.
 
-- the topic passed to `WorkflowRuntime.emit(...)` / `emitValue(...)` or
-  `workflowApp.emitValue(...)` matches the one passed to `awaitEvent(...)`
-- the run is still waiting on that topic
-- the payload encodes to a string-keyed map such as `Map<String, dynamic>`
+**Remedy:** emit the matching value once the run is waiting, or cancel it
+deliberately. Event handling is not exactly once; consumers must be idempotent.
 
-## Serialization failures
+## Restart or redelivery repeats work
 
-Do not pass arbitrary Dart objects across workflow or task boundaries. Encode
-domain objects as string-keyed JSON-like maps or lists first.
+**Check:** inspect the persisted checkpoint/journal and lease/visibility
+timeouts. A completed checkpoint should recover from durable state; an
+abandoned claim may be attempted again.
 
-## Logs only show `stem.workflow.run`
+**Remedy:** use a durable workflow store, size leases for the operation, and
+make effects idempotent. Mobile apps have no background-lifetime guarantee:
+suspension or termination can interrupt a run. Run durable workers on a server
+when completion is required.
 
-Upgrade to a build that includes the newer workflow log context. The logs
-should include workflow name, run id, channel, and checkpoint metadata in
-addition to the internal task name.
+## Serialization or store errors
 
-## Leases or redelivery behave strangely
+**Check:** values crossing workflow boundaries must be encodable by the active
+codec and supported by the adapter. Verify migrations, store URL, namespace,
+and definition compatibility.
 
-Check the relationship between:
-
-- broker visibility timeout
-- workflow run lease duration
-- lease renewal cadence
-
-If the broker redelivers before the workflow lease model expects, another
-worker can observe a task before the prior lease is considered stale.
+**Remedy:** encode domain objects as JSON-like maps/lists, migrate using the
+adapter instructions, and deploy compatible workflow definitions.

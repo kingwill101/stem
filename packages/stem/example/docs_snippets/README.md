@@ -56,7 +56,11 @@ To import an entire file (no region):
 ```
 ````
 
-**Note:** Paths are relative to the markdown file's location.
+**Note:** Ordinary relative paths resolve from the Markdown file's directory.
+`<rootDir>` resolves to `.site/` because that is the root configured by the
+site's snippet plugin. Region names and their closing markers must exist:
+invalid includes fail the documentation build rather than rendering an error
+comment in the published page.
 
 ## Running Examples
 
@@ -65,8 +69,25 @@ dart pub get
 dart analyze
 ```
 
+The infrastructure tutorial also runs across three processes. Set
+`STEM_BROKER_URL`, `STEM_RESULT_BACKEND_URL`, and a dedicated `STEM_NAMESPACE`
+for a local Redis instance, then run:
+
+```bash
+dart run lib/infrastructure.dart enqueue
+dart run lib/infrastructure.dart work
+dart run lib/infrastructure.dart result TASK_ID
+```
+
+Use the ID printed by `enqueue`. The expected result is `42`; `work` is a
+one-shot worker that stops after an idle window. See the website's
+Infrastructure guide for deployment assumptions and cleanup.
+
 ## Adding New Examples
 
 1. Create or edit a file in `lib/` with proper region markers
 2. Reference the region in your markdown file using the syntax above
 3. Run `npm run build` from `.site/` to verify it works
+4. Run `npm run test:docs` from `.site/` after resolving the root workspace
+   with `flutter pub get`. This verifies snippet-import failures and executes
+   the selected complete README/site/core-skill examples against local APIs.

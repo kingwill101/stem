@@ -2,14 +2,20 @@
 title: Starting and Waiting
 ---
 
-Workflow runs are started through the runtime, through `StemWorkflowApp`, or
-through typed workflow refs.
+Workflow runs are started through a `WorkflowCaller`: a `WorkflowRuntime`,
+`StemWorkflowApp`, or an execution context. Name-based runtime methods are the
+transport-level fallback; `Flow`/`WorkflowScript` helpers and typed refs keep
+the definition and its codecs attached to the call site.
 
 ## Start by workflow name
 
 ```dart title="bin/run_workflow.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-run
 
 ```
+
+This is an extracted region from the runnable `docs_snippets` example.
+`ApprovalsFlow`, `ApprovalDraft`, and the import are defined elsewhere in that
+file, so this block is not standalone until those definitions are copied too.
 
 Use `params:` to supply workflow input and
 `WorkflowCancellationPolicy` to cap wall-clock runtime or maximum suspension
@@ -54,7 +60,7 @@ final runId = await approvalsRef.start(
   parentRunId: 'parent-run',
   ttl: const Duration(hours: 1),
   cancellationPolicy: const WorkflowCancellationPolicy(
-    maxRuntime: Duration(minutes: 10),
+    maxRunDuration: Duration(minutes: 10),
   ),
 );
 ```
@@ -114,7 +120,8 @@ like `ordersFlow.startAndWait(...)` and
 `StemWorkflowDefinitions.orders.startAndWait(...)`.
 
 `waitForCompletion<T>` is the low-level completion API for name-based runs. It
-polls the store until the run finishes or the caller times out. For DTO
+polls the store until the run finishes or the caller times out; it does not
+subscribe to a completion stream. For DTO
 results, prefer `decodeJson:` for plain DTOs or `decodeVersionedJson:` when
 the persisted payload carries an explicit schema version.
 If you already have a raw `WorkflowResult<Object?>`, use
@@ -197,4 +204,5 @@ adjust an explicit start request before dispatch.
 - `ttl` when you want run metadata to expire after a bounded retention period
 
 Those are advanced controls. Most applications only need `params:` and an
-optional cancellation policy.
+optional cancellation policy. A TTL expires run metadata; it is not the same
+as `maxRunDuration`, which causes runtime cancellation.

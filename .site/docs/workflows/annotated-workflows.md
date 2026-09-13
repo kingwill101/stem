@@ -4,11 +4,15 @@ title: Annotated Workflows
 
 Use `stem_builder` when you want workflow authoring to look like normal Dart
 methods instead of manual `Flow(...)` or `WorkflowScript(...)` objects.
+This is an authoring alternative, not a replacement or deprecation of those
+lower-level definitions. `HostedWorkflow` is another, function-first facade;
+choose one model per definition rather than combining their registration
+surfaces.
 
 ## What the generator gives you
 
 After adding `part '<file>.stem.g.dart';` and running `build_runner`, the
-generated file exposes:
+generated file exposes (for definitions present in that library):
 
 - `stemModule`
 - `StemWorkflowDefinitions`
@@ -93,8 +97,10 @@ class UserSignupWorkflow {
 }
 ```
 
-The generator rewrites those calls into durable checkpoint boundaries in the
-generated proxy class.
+The generator rewrites calls to methods marked `@WorkflowStep` into durable
+checkpoint boundaries in the generated proxy class. The `run` method itself is
+not a remotely routed activity: code outside a checkpoint can execute again
+when the script is replayed.
 
 When you need runtime metadata, add an optional named injected context
 parameter:
@@ -159,8 +165,10 @@ example that demonstrates:
 - codec-backed DTO workflow checkpoints and final workflow results
 - typed task DTO input and result decoding
 
-When you inspect run detail, the runtime now exposes `checkpoints` for script
-workflows rather than reusing the flow-step view model.
+When you inspect run detail, the runtime exposes `checkpoints` for script
+workflows rather than reusing the flow-step view model. The generated names and
+checkpoint order are persisted contracts: keep them compatible when reopening
+old runs.
 
 ## DTO rules
 

@@ -5,9 +5,11 @@ sidebar_position: 7
 slug: /core-concepts/persistence
 ---
 
-Use persistence when you need durable task state, workflow state, shared
-schedules, or revocation storage. Stem ships with Redis, Postgres, and SQLite
-adapters plus in-memory variants for local development.
+Use persistence when you need task results, workflow state, shared schedules, or
+revocation storage. Stem ships with Redis, Postgres, and SQLite adapters plus
+in-memory variants for local development. The broker and result backend are
+separate components: a successful enqueue does not write a task result, and a
+result backend does not deliver queue work.
 
 For the normal path, prefer `StemClient.inMemory(...)`,
 `StemClient.fromUrl(...)`, or a reusable `StemStack.fromUrl(...).createClient(...)`.
@@ -82,6 +84,11 @@ That store is what allows workflow resumes, run inspection, and recovery across
 worker restarts. See the top-level [Workflows](../workflows/index.md) section
 for the durable orchestration model and runtime behavior.
 
+Each adapter owns its workflow schema or key namespace. Configure the broker,
+result backend, workflow store, schedule/lock stores, and revoke store
+deliberately; sharing a physical database or Redis instance does not make their
+updates one transaction.
+
 ## Schedule & lock stores
 
 ```dart title="lib/beat_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-beat-stores
@@ -111,8 +118,15 @@ export STEM_REVOKE_STORE_URL=postgres://postgres:postgres@localhost:5432/stem
 
 - In-memory adapters are great for local tests; switch to Redis/Postgres when
 you need persistence or multi-process coordination.
-- SQLite is single-writer: keep only workers connected to the backend and use
-  a separate SQLite file for the broker.
-- Postgres adapters automatically migrate required tables on first connect.
+- SQLite is single-writer: use separate broker and backend files when practical
+  to reduce contention. Sharing a file is supported, but does not provide
+  multi-host coordination. For workflows, prefer a separate workflow-store file
+  as well.
+- SQLite is local persistence, not a mobile OS background scheduler; mobile
+  platform callbacks must reopen the app and explicitly start or recover work.
+- Postgres adapters run their adapter migrations on connect; migrations create
+  shared `stem_*` tables, with namespace columns isolating Stem components'
+  records. Coordinate migrations and permissions with the application's schema
+  ownership policy.
 - Configure TTLs on the result backend via `backend.set` to limit retained data.
 - For HA Beat deployments, use the same lock store across instances.

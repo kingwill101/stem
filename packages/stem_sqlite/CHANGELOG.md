@@ -2,6 +2,7 @@
 
 ## 0.3.0
 
+- Ship a package skill for SQLite-backed workflows and persistent restart.
 - Require Dart `>=3.13.0 <4.0.0`.
 - Use shared journal argument validation so malformed writes raise `ArgumentError`
   before any persisted-state mutation.

@@ -2,6 +2,8 @@
 
 ## 0.5.0
 
+- Ship package skills for typed tasks and hosted workflows, and reorganize
+  onboarding around runnable examples, persistence choices, and lifecycle limits.
 - Require Dart `>=3.13.0 <4.0.0`; align examples and documentation with the new
   language baseline.
 - Validate journal write arguments consistently across bundled stores. Malformed

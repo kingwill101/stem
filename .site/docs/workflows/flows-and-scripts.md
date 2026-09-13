@@ -21,11 +21,21 @@ is that for script workflows those are **checkpoints**, not the plan itself.
 - **Script checkpoints** exist for replay boundaries, manifests, dashboards,
   and tooling.
 
+Neither model is deprecated. `HostedWorkflow` is a separate, function-first
+facade that lowers into the script runtime; use it when that is the authoring
+surface you want. Use the lower-level models here when you need direct control
+over definitions, contexts, or registration.
+
 ## Flow example
 
 ```dart title="lib/workflows/approvals_flow.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-flow
 
 ```
+
+The example above is an extracted, source-tested region. Its `ApprovalDraft`
+and `ApprovalDecision` types, imports, and app setup live in the linked
+`docs_snippets` file; copy those definitions too when making a standalone
+example.
 
 Manual flows can also derive a typed workflow ref from the definition:
 
@@ -53,7 +63,9 @@ Use `Flow` when:
 
 ```
 
-Manual scripts support the same pattern:
+Manual scripts support the same pattern. `script.step(...)` is the durable
+boundary; ordinary code between checkpoints runs again during replay, so keep
+replay-sensitive side effects inside a checkpoint and make them idempotent.
 
 ```dart
 final retryRef = retryScript.ref<Map<String, Object?>>(
