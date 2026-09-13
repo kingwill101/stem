@@ -3,7 +3,7 @@
 ## 0.5.0
 
 - Require Dart `>=3.13.0 <4.0.0`; align examples and documentation with the new
-  language baseline and document changes since Dart 3.9.
+  language baseline.
 - Validate journal write arguments consistently across bundled stores. Malformed
   revisions, blank identities, and invalid checkpoint combinations throw
   `ArgumentError` rather than being retried as optimistic-concurrency conflicts.

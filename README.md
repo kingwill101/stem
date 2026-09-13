@@ -239,9 +239,6 @@ stem health
 - Docker (for adapter integration tests)
 - Nix and devenv 2.2+ (recommended workspace environment)
 
-See the [Dart 3.13 upgrade guide](./packages/stem/doc/dart-3.13-upgrade.md)
-for the changes since Dart 3.9 and the recommended feature-adoption order.
-
 ### Setup
 
 ```bash
