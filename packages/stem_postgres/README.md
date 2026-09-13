@@ -86,6 +86,16 @@ await broker.close();
 await outbox.close();
 ```
 
+Transactions on the same `DataSource` are serialized. A transaction started
+from inside another transaction on that source joins the outer transaction; it
+does not create a savepoint. Joined operations are awaited before commit, so
+unawaited admitted work can still roll back the transaction. Any admitted
+operation failure marks the transaction rollback-only, even when the Dart
+caller catches it. Outbox publications are bound to their originating scope,
+which stays open while admitted work drains and closes before commit. Retained
+transaction objects and escaped publications are rejected after that cutover,
+including when a later transaction uses the same data source.
+
 The relay is at least once. A crash after broker publication and before the
 outbox row is marked dispatched can publish the same envelope again. Stem's
 Postgres broker deduplicates queue rows by envelope ID, but task handlers and

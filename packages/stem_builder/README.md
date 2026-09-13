@@ -17,6 +17,33 @@ Generated `StemPayloadCodecs` fields remain `PayloadCodec<T>.json` conveniences.
 task/workflow codec arguments also accept any `Codec<T, Object?>`; generated
 JSON DTO adapters and stored schema-version formats remain unchanged.
 
+### Explicit payload codec bindings
+
+For a non-JSON representation, bind a standard codec in the same library as
+the annotated task or workflow:
+
+```dart
+@PayloadCodecDefn()
+Codec<Order, Object?> get orderCodec => const OrderCodec();
+
+@PayloadCodecDefn()
+const Codec<List<Order>, Object?> ordersCodec = OrdersCodec();
+```
+
+The binding is library-local and matches the codec's `Codec<T, Object?>` type
+argument exactly, including nullability. The generated part keeps a reference
+to the annotated value (so a getter is evaluated once) and does not infer
+generic codecs or use reflection. Generic DTOs, DTO collections, and other
+unsupported generated shapes therefore require an explicit binding. A codec
+owns its representation; map envelopes are still the runtime transport
+envelope and codec output must follow the selected backend's contract.
+
+The codec object itself must be non-nullable. `Codec<Order?, Object?>` can
+encode nullable payloads; `Codec<Order, Object?>?` is not a valid binding.
+Flow input widening must also preserve the codec representation: synthesized
+JSON may widen `Order` to `Order?` for the same DTO, but a custom binding cannot
+silently switch to synthesized JSON or a different custom binding.
+
 ## Install
 
 ```bash
@@ -157,15 +184,17 @@ Serializable parameter rules are enforced by the generator:
 - supported DTOs:
   - Non-generic Dart classes with `toJson()` plus a named `fromJson(...)` constructor
     taking `Map<String, Object?>`
-- unsupported directly:
+- supported with an exact `@PayloadCodecDefn()` binding:
+  - concrete generic DTOs, collections of DTOs, and other codec-backed values
+- unsupported:
   - optional/named business parameters on generated workflow/task entrypoints
-  - generic DTOs, collections of DTOs, and sets
+  - unbound generic DTOs, collections of DTOs, and sets
 
 Accepting `Object?` does not make arbitrary Dart objects persistable. The actual
-value must satisfy the selected transport/backend contract. For unsupported
-generated DTO shapes or custom binary codecs, use the core typed definitions
-with an explicit standard Dart codec; the generator does not yet bind a host's
-codec registry automatically.
+value must satisfy the selected transport/backend contract. For custom
+representations, declare a library-local codec binding or use core typed
+definitions directly. The generator does not inspect or automatically bind a
+host's runtime codec registry.
 
 Typed task results can use the same DTO convention.
 

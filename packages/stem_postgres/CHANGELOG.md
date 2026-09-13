@@ -2,6 +2,16 @@
 
 ## 0.3.0
 
+- Use shared journal argument validation and replace per-record rewind cleanup
+  with one parameterized journal deletion.
+- Join same-data-source transactions without nested queue deadlocks. Drain
+  admitted operations before commit and make any admitted failure rollback-only,
+  including caught failures. Bind outbox publications to their originating
+  transaction scope and reject retained or escaped writes after it closes.
+- Add workflow journal persistence with run-row locking, record revision CAS,
+  atomic checkpoint/compensation writes, and ordered cleanup recovery.
+- Add atomic first-terminal-wins completion/cancellation and prevent ordinary
+  workflow mutations from resurrecting terminal runs.
 - Resolve event watchers only while their locked run is still suspended on the
   requested topic, preventing stale resolutions from reviving failed or
   replaced waits.

@@ -78,6 +78,15 @@ class RunState {
   Map<String, Object?> get workflowParams =>
       WorkflowRunRuntimeMetadata.stripFromParams(params);
 
+  /// Control metadata for resuming this run after its scheduled due time.
+  ///
+  /// Both explicit due-run resumption and runtime polling use this encoding.
+  /// The reason belongs to suspension metadata, never the user event payload.
+  Map<String, Object?> get dueResumeData => {
+    ...?suspensionData,
+    'resumeReason': waitTopic == null ? 'sleep' : 'eventDeadline',
+  };
+
   /// Decodes the workflow params payload with [codec].
   TParams paramsAs<TParams>({required Codec<TParams, Object?> codec}) {
     return codec.decode(workflowParams);

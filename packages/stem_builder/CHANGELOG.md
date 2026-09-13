@@ -2,6 +2,14 @@
 
 ## 0.4.0
 
+- Validate codec representation provenance across flow steps and reject nullable
+  codec declarations before emission. Nullable payload types remain supported.
+- Add `@PayloadCodecDefn()` bindings for library-local standard
+  `Codec<T, Object?>` values and getters. Matching is exact, including
+  nullability; duplicate, non-codec, and invalid output bindings are rejected.
+  Generated parts retain the binding value rather than wrapping it, so getters
+  are evaluated once and concrete codec subtypes are preserved. Generic codec
+  inference and reflection remain unsupported.
 - Preserve synchronous collection result types by unwrapping only `Future` and
   `FutureOr`. Normalize task entrypoints without erasing their typed results.
 - Validate flow step inputs against the starter contract and reject duplicate

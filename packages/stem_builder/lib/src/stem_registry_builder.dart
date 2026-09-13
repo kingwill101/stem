@@ -39,6 +39,10 @@ class StemRegistryBuilder implements Builder {
       inPackage: 'stem',
     );
     const taskDefnChecker = TypeChecker.typeNamed(TaskDefn, inPackage: 'stem');
+    const payloadCodecDefnChecker = TypeChecker.typeNamed(
+      PayloadCodecDefn,
+      inPackage: 'stem',
+    );
 
     const flowContextChecker = TypeChecker.typeNamed(
       FlowContext,
@@ -78,6 +82,10 @@ class StemRegistryBuilder implements Builder {
     }
 
     final library = await buildStep.resolver.libraryFor(input);
+    final codecBindings = _PayloadCodecBindings.fromLibrary(
+      library,
+      payloadCodecDefnChecker,
+    );
     for (final classElement in library.classes) {
       final annotation = workflowDefnChecker.firstAnnotationOfExact(
         classElement,
@@ -175,6 +183,7 @@ class StemRegistryBuilder implements Builder {
         final runBinding = _validateRunMethod(
           runMethod,
           scriptContextChecker,
+          codecBindings,
         );
         final scriptSteps = <_WorkflowStepInfo>[];
         for (final method in stepMethods) {
@@ -182,6 +191,7 @@ class StemRegistryBuilder implements Builder {
             method,
             scriptStepContextChecker,
             workflowExecutionContextChecker,
+            codecBindings,
           );
           final stepAnnotation = workflowStepChecker.firstAnnotationOfExact(
             method,
@@ -276,6 +286,7 @@ class StemRegistryBuilder implements Builder {
           method,
           flowContextChecker,
           workflowExecutionContextChecker,
+          codecBindings,
         );
         final stepAnnotation = workflowStepChecker.firstAnnotationOfExact(
           method,
@@ -359,6 +370,7 @@ class StemRegistryBuilder implements Builder {
         function,
         taskContextChecker,
         mapChecker,
+        codecBindings,
       );
       final readerAnnotation = ConstantReader(annotation);
       final taskName =
@@ -432,6 +444,7 @@ class StemRegistryBuilder implements Builder {
     final registryCode = _RegistryEmitter(
       workflows: workflows,
       tasks: tasks,
+      customCodecReferences: codecBindings.referencesByTypeCode,
     ).emit(partOfFile: fileName);
     final formatted = _format(registryCode);
     await buildStep.writeAsString(outputId, formatted);
@@ -451,6 +464,7 @@ class StemRegistryBuilder implements Builder {
   static _RunBinding _validateRunMethod(
     MethodElement method,
     TypeChecker scriptContextChecker,
+    _PayloadCodecBindings codecBindings,
   ) {
     if (method.isPrivate) {
       throw InvalidGenerationSourceError(
@@ -479,7 +493,10 @@ class StemRegistryBuilder implements Builder {
           element: method,
         );
       }
-      final valueParameter = _createValueParameterInfo(parameter);
+      final valueParameter = _createValueParameterInfo(
+        parameter,
+        codecBindings,
+      );
       if (valueParameter == null) {
         throw InvalidGenerationSourceError(
           '@workflow.run method ${method.displayName} parameter "${parameter.displayName}" must use a serializable or codec-backed DTO type.',
@@ -496,6 +513,7 @@ class StemRegistryBuilder implements Builder {
       resultTypeCode: _workflowResultTypeCode(method.returnType),
       resultPayloadCodecTypeCode: _workflowResultPayloadCodecTypeCode(
         method.returnType,
+        codecBindings,
       ),
     );
   }
@@ -504,6 +522,7 @@ class StemRegistryBuilder implements Builder {
     MethodElement method,
     TypeChecker flowContextChecker,
     TypeChecker workflowExecutionContextChecker,
+    _PayloadCodecBindings codecBindings,
   ) {
     if (method.isPrivate) {
       throw InvalidGenerationSourceError(
@@ -531,7 +550,10 @@ class StemRegistryBuilder implements Builder {
           element: method,
         );
       }
-      final valueParameter = _createValueParameterInfo(parameter);
+      final valueParameter = _createValueParameterInfo(
+        parameter,
+        codecBindings,
+      );
       if (valueParameter == null) {
         throw InvalidGenerationSourceError(
           '@workflow.step method ${method.displayName} parameter "${parameter.displayName}" must use a serializable or codec-backed DTO type.',
@@ -549,6 +571,7 @@ class StemRegistryBuilder implements Builder {
       stepValueTypeCode: _workflowResultTypeCode(method.returnType),
       stepValuePayloadCodecTypeCode: _workflowResultPayloadCodecTypeCode(
         method.returnType,
+        codecBindings,
       ),
     );
   }
@@ -557,6 +580,7 @@ class StemRegistryBuilder implements Builder {
     MethodElement method,
     TypeChecker scriptStepContextChecker,
     TypeChecker workflowExecutionContextChecker,
+    _PayloadCodecBindings codecBindings,
   ) {
     if (method.isPrivate) {
       throw InvalidGenerationSourceError(
@@ -595,7 +619,10 @@ class StemRegistryBuilder implements Builder {
           element: method,
         );
       }
-      final valueParameter = _createValueParameterInfo(parameter);
+      final valueParameter = _createValueParameterInfo(
+        parameter,
+        codecBindings,
+      );
       if (valueParameter == null) {
         throw InvalidGenerationSourceError(
           '@workflow.step method ${method.displayName} parameter "${parameter.displayName}" must use a serializable or codec-backed DTO type.',
@@ -612,7 +639,10 @@ class StemRegistryBuilder implements Builder {
       valueParameters: valueParameters,
       returnTypeCode: _typeCode(returnType),
       stepValueTypeCode: _typeCode(stepValueType),
-      stepValuePayloadCodecTypeCode: _payloadCodecTypeCode(stepValueType),
+      stepValuePayloadCodecTypeCode: _payloadCodecTypeCode(
+        stepValueType,
+        codecBindings,
+      ),
     );
   }
 
@@ -620,6 +650,7 @@ class StemRegistryBuilder implements Builder {
     TopLevelFunctionElement function,
     TypeChecker taskContextChecker,
     TypeChecker mapChecker,
+    _PayloadCodecBindings codecBindings,
   ) {
     final parameters = function.formalParameters;
     final contextParameter = _extractInjectedContextParameter(
@@ -650,6 +681,7 @@ class StemRegistryBuilder implements Builder {
         resultTypeCode: _taskResultTypeCode(function.returnType),
         resultPayloadCodecTypeCode: _taskResultPayloadCodecTypeCode(
           function.returnType,
+          codecBindings,
         ),
       );
     }
@@ -662,7 +694,10 @@ class StemRegistryBuilder implements Builder {
           element: function,
         );
       }
-      final valueParameter = _createValueParameterInfo(parameter);
+      final valueParameter = _createValueParameterInfo(
+        parameter,
+        codecBindings,
+      );
       if (valueParameter == null) {
         throw InvalidGenerationSourceError(
           '@TaskDefn function ${function.displayName} parameter "${parameter.displayName}" must use a serializable or codec-backed DTO type.',
@@ -680,23 +715,26 @@ class StemRegistryBuilder implements Builder {
       resultTypeCode: _taskResultTypeCode(function.returnType),
       resultPayloadCodecTypeCode: _taskResultPayloadCodecTypeCode(
         function.returnType,
+        codecBindings,
       ),
     );
   }
 
   static _ValueParameterInfo? _createValueParameterInfo(
     FormalParameterElement parameter,
+    _PayloadCodecBindings codecBindings,
   ) {
     final type = parameter.type;
-    final codecTypeCode = _payloadCodecTypeCode(type);
-    if (!_isSerializableValueType(type) && codecTypeCode == null) {
+    final codecInfo = _payloadCodecInfo(type, codecBindings);
+    if (!_isSerializableValueType(type) && codecInfo == null) {
       return null;
     }
     return _ValueParameterInfo(
       name: parameter.displayName,
       type: type,
       typeCode: _typeCode(type),
-      payloadCodecTypeCode: codecTypeCode,
+      payloadCodecTypeCode: codecInfo?.typeCode,
+      payloadRepresentation: codecInfo?.representation,
     );
   }
 
@@ -785,7 +823,10 @@ class StemRegistryBuilder implements Builder {
     return _typeCode(valueType);
   }
 
-  static String? _taskResultPayloadCodecTypeCode(DartType returnType) {
+  static String? _taskResultPayloadCodecTypeCode(
+    DartType returnType,
+    _PayloadCodecBindings codecBindings,
+  ) {
     final valueType = _extractAsyncValueType(returnType);
     if (valueType is VoidType || valueType is NeverType) {
       return null;
@@ -793,10 +834,13 @@ class StemRegistryBuilder implements Builder {
     if (valueType.isDartCoreNull) {
       return null;
     }
-    return _payloadCodecTypeCode(valueType);
+    return _payloadCodecTypeCode(valueType, codecBindings);
   }
 
-  static String? _workflowResultPayloadCodecTypeCode(DartType returnType) {
+  static String? _workflowResultPayloadCodecTypeCode(
+    DartType returnType,
+    _PayloadCodecBindings codecBindings,
+  ) {
     final valueType = _extractAsyncValueType(returnType);
     if (valueType is VoidType || valueType is NeverType) {
       return null;
@@ -804,7 +848,7 @@ class StemRegistryBuilder implements Builder {
     if (valueType.isDartCoreNull) {
       return null;
     }
-    return _payloadCodecTypeCode(valueType);
+    return _payloadCodecTypeCode(valueType, codecBindings);
   }
 
   static bool _isStringObjectMap(DartType type) {
@@ -846,7 +890,27 @@ class StemRegistryBuilder implements Builder {
     return false;
   }
 
-  static String? _payloadCodecTypeCode(DartType type) {
+  static String? _payloadCodecTypeCode(
+    DartType type,
+    _PayloadCodecBindings codecBindings,
+  ) {
+    return _payloadCodecInfo(type, codecBindings)?.typeCode;
+  }
+
+  static _PayloadCodecInfo? _payloadCodecInfo(
+    DartType type,
+    _PayloadCodecBindings codecBindings,
+  ) {
+    final explicit = codecBindings.forType(type);
+    if (explicit != null) {
+      return _PayloadCodecInfo(
+        typeCode: _typeCode(type),
+        representation: _PayloadRepresentation.custom(
+          explicit,
+          _payloadTypeKey(type),
+        ),
+      );
+    }
     if (type is! InterfaceType) return null;
     if (type.isDartCoreMap || type.isDartCoreList || type.isDartCoreSet) {
       return null;
@@ -874,7 +938,12 @@ class StemRegistryBuilder implements Builder {
     if (fromJsonConstructor.isEmpty) {
       return null;
     }
-    return _typeCode(type);
+    return _PayloadCodecInfo(
+      typeCode: _typeCode(type),
+      representation: _PayloadRepresentation.autoJson(
+        _payloadBaseTypeKey(type),
+      ),
+    );
   }
 
   static bool _isStringKeyedMapLike(DartType type) {
@@ -1087,14 +1156,23 @@ void _validateFlowStepParameterContract(
             starterParameter.type,
             parameter.type,
           ) ||
-          _codecBaseType(starterParameter.payloadCodecTypeCode) !=
-              _codecBaseType(parameter.payloadCodecTypeCode)) {
+          !_compatiblePayloadRepresentations(
+            starterParameter.payloadRepresentation,
+            parameter.payloadRepresentation,
+          )) {
+        final representationMismatch =
+            starterParameter != null &&
+            !_compatiblePayloadRepresentations(
+              starterParameter.payloadRepresentation,
+              parameter.payloadRepresentation,
+            );
         throw InvalidGenerationSourceError(
           'Workflow ${classElement.displayName} step "${step.name}" '
           'parameter "${parameter.name}" is not present with a compatible '
           'type and payload representation in the first step '
-          '"${steps.first.name}". The flow starter '
-          'contract is defined by the first step parameters.',
+          '"${steps.first.name}".'
+          '${representationMismatch ? ' The first step uses ${starterParameter.payloadRepresentation?.description ?? 'raw JSON'}, but this step uses ${parameter.payloadRepresentation?.description ?? 'raw JSON'}.' : ''} '
+          'The flow starter contract is defined by the first step parameters.',
           element: classElement,
         );
       }
@@ -1102,8 +1180,15 @@ void _validateFlowStepParameterContract(
   }
 }
 
-String? _codecBaseType(String? typeCode) =>
-    typeCode?.replaceFirst(RegExp(r'\?$'), '');
+bool _compatiblePayloadRepresentations(
+  _PayloadRepresentation? first,
+  _PayloadRepresentation? next,
+) {
+  // Nullability widening is safe only for synthesized JSON. Custom codecs
+  // encode a particular Dart representation and must remain exact.
+  if (first == null || next == null) return first == next;
+  return first.sameAs(next);
+}
 
 Future<void> _diagnoseScriptCheckpointPatterns(
   BuildStep buildStep,
@@ -1338,12 +1423,50 @@ class _ValueParameterInfo {
     required this.type,
     required this.typeCode,
     required this.payloadCodecTypeCode,
+    required this.payloadRepresentation,
   });
 
   final String name;
   final DartType type;
   final String typeCode;
   final String? payloadCodecTypeCode;
+  final _PayloadRepresentation? payloadRepresentation;
+}
+
+class _PayloadCodecInfo {
+  const _PayloadCodecInfo({
+    required this.typeCode,
+    required this.representation,
+  });
+
+  final String typeCode;
+  final _PayloadRepresentation representation;
+}
+
+class _PayloadRepresentation {
+  const _PayloadRepresentation.custom(this.customCodecName, this.typeKey)
+    : autoJsonBaseTypeKey = null;
+
+  const _PayloadRepresentation.autoJson(this.autoJsonBaseTypeKey)
+    : customCodecName = null,
+      typeKey = null;
+
+  final String? customCodecName;
+  final String? typeKey;
+  final String? autoJsonBaseTypeKey;
+
+  bool get isAutoJson => customCodecName == null;
+
+  bool sameAs(_PayloadRepresentation? other) =>
+      other != null &&
+      other.customCodecName == customCodecName &&
+      (isAutoJson
+          ? other.autoJsonBaseTypeKey == autoJsonBaseTypeKey
+          : other.typeKey == typeKey);
+
+  String get description => isAutoJson
+      ? 'synthesized JSON for $autoJsonBaseTypeKey'
+      : 'custom codec "$customCodecName"';
 }
 
 class _InjectedContextParameter {
@@ -1360,14 +1483,120 @@ class _InjectedContextParameter {
   final String typeCode;
 }
 
+class _PayloadCodecBindings {
+  _PayloadCodecBindings._(this._bindings, this.referencesByTypeCode);
+
+  factory _PayloadCodecBindings.fromLibrary(
+    LibraryElement library,
+    TypeChecker annotationChecker,
+  ) {
+    final bindings = <String, String>{};
+    final references = <String, String>{};
+    final seen = <Element>{};
+    final elements = <Element>[
+      ...library.topLevelVariables,
+      ...library.getters,
+    ];
+    for (final element in elements) {
+      if (!seen.add(element) ||
+          !annotationChecker.hasAnnotationOfExact(element)) {
+        continue;
+      }
+      final type = element is GetterElement
+          ? element.returnType
+          : (element as VariableElement).type;
+      final codecType = type is InterfaceType
+          ? <InterfaceType>[
+              if (_isDartConvertCodec(type)) type,
+              ...type.allSupertypes.where(
+                _isDartConvertCodec,
+              ),
+            ].firstWhere(
+              _isDartConvertCodec,
+              orElse: () => type,
+            )
+          : null;
+      if (type.nullabilitySuffix != NullabilitySuffix.none ||
+          codecType == null ||
+          !_isDartConvertCodec(codecType) ||
+          codecType.typeArguments.length != 2 ||
+          !codecType.typeArguments[1].isDartCoreObject ||
+          codecType.typeArguments[1].nullabilitySuffix !=
+              NullabilitySuffix.question) {
+        throw InvalidGenerationSourceError(
+          '@PayloadCodecDefn must annotate a Codec<T, Object?> value or getter.',
+          element: element,
+        );
+      }
+      final valueType = codecType.typeArguments.first;
+      final key = _payloadTypeKey(valueType);
+      final name = element.displayName;
+      final previous = bindings[key];
+      if (previous != null) {
+        throw InvalidGenerationSourceError(
+          'Duplicate @PayloadCodecDefn binding for ${valueType.getDisplayString()}: '
+          '$previous and $name.',
+          element: element,
+        );
+      }
+      bindings[key] = name;
+      final typeCode = valueType.getDisplayString();
+      final previousReference = references[typeCode];
+      if (previousReference != null && previousReference != name) {
+        throw InvalidGenerationSourceError(
+          'Ambiguous @PayloadCodecDefn bindings for $typeCode: '
+          '$previousReference and $name.',
+          element: element,
+        );
+      }
+      references[typeCode] = name;
+    }
+    return _PayloadCodecBindings._(bindings, references);
+  }
+
+  final Map<String, String> _bindings;
+  final Map<String, String> referencesByTypeCode;
+
+  String? forType(DartType type) => _bindings[_payloadTypeKey(type)];
+}
+
+bool _isDartConvertCodec(InterfaceType type) =>
+    type.element.name == 'Codec' &&
+    type.element.library.isInSdk &&
+    type.element.library.firstFragment.source.uri.scheme == 'dart';
+
+String _payloadTypeKey(DartType type) {
+  if (type is InterfaceType) {
+    final library = type.element.library;
+    final args = type.typeArguments.map(_payloadTypeKey).join(',');
+    return '${library.firstFragment.source.uri}#${type.element.name}<$args>'
+        '${type.nullabilitySuffix}';
+  }
+  return '${type.getDisplayString()}${type.nullabilitySuffix}';
+}
+
+String _payloadBaseTypeKey(DartType type) {
+  if (type is InterfaceType) {
+    final library = type.element.library;
+    return '${library.firstFragment.source.uri}#${type.element.name}';
+  }
+  return type.getDisplayString();
+}
+
 class _RegistryEmitter {
   _RegistryEmitter({
     required this.workflows,
     required this.tasks,
-  }) : payloadCodecSymbols = _payloadCodecSymbolsFor(workflows, tasks);
+    required this.customCodecReferences,
+  }) : payloadCodecSymbols = _payloadCodecSymbolsFor(
+         workflows,
+         tasks,
+         reservedNames: customCodecReferences.values.toSet(),
+       );
 
   final List<_WorkflowInfo> workflows;
   final List<_TaskInfo> tasks;
+  final Map<String, String> customCodecReferences;
   final Map<String, String> payloadCodecSymbols;
 
   static String emptyPart({required String fileName}) {
@@ -1383,8 +1612,9 @@ class _RegistryEmitter {
 
   static Map<String, String> _payloadCodecSymbolsFor(
     List<_WorkflowInfo> workflows,
-    List<_TaskInfo> tasks,
-  ) {
+    List<_TaskInfo> tasks, {
+    Set<String> reservedNames = const {},
+  }) {
     final orderedTypes = <String>[];
     void addType(String? typeCode) {
       if (typeCode == null || orderedTypes.contains(typeCode)) return;
@@ -1411,7 +1641,7 @@ class _RegistryEmitter {
     }
 
     final result = <String, String>{};
-    final used = <String>{};
+    final used = <String>{...reservedNames};
     for (final typeCode in orderedTypes) {
       var candidate = _lowerCamelStatic(_pascalIdentifierStatic(typeCode));
       if (candidate.isEmpty) {
@@ -1461,6 +1691,14 @@ class _RegistryEmitter {
     for (final entry in payloadCodecSymbols.entries) {
       final typeCode = entry.key;
       final symbol = entry.value;
+      final customReference = customCodecReferences[typeCode];
+      if (customReference != null) {
+        // Keep the annotated value itself. Apart from avoiding a second getter
+        // evaluation, this preserves the concrete Codec subtype and does not
+        // require the generated part to import dart:convert.
+        buffer.writeln('  static final $symbol = $customReference;');
+        continue;
+      }
       if (typeCode.endsWith('?')) {
         final valueType = _nonNullableTypeCode(typeCode);
         buffer.writeln(

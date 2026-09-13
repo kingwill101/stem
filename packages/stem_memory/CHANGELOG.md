@@ -2,6 +2,10 @@
 
 ## 0.3.0
 
+- Support the core workflow journal and complete in-memory run-change feed used
+  by reactive host observation.
+- The re-exported in-memory workflow store supports atomic first-terminal-wins
+  completion/cancellation and preserves terminal outcomes.
 - Require Stem `>=0.5.0 <1.0.0` and the shared adapter contract
   `>=0.3.0 <1.0.0`, allowing later pre-1.0 releases.
 

@@ -220,6 +220,17 @@ Future<void> main() async {
 }
 ```
 
+### Typed workflow host
+
+Use `WorkflowHost` for typed submission, result/status handles, named
+checkpoints, durable sleeps, and typed event waits. Unlike constructing a
+`StemWorkflowApp` directly, an owned host starts its app during creation.
+Borrowed hosts leave lifecycle management to the caller.
+
+See the [host guide](doc/workflow_host.md) and
+[runnable example](example/workflows/hosted.dart), including persistent
+reattachment and observation-versus-cancellation semantics.
+
 ### Workflow quick-start (Flow)
 
 ```dart

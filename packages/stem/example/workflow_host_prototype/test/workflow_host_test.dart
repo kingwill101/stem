@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:stem/stem.dart';
 import 'package:stem_memory/stem_memory.dart';
 import 'package:test/test.dart';
-import 'package:workflow_host_prototype/workflow_host.dart';
 
 final class Receipt {
   Receipt(this.total);
@@ -16,8 +15,26 @@ final receiptCodec = PayloadCodec<Receipt>.map(
   decode: (value) => Receipt(value['total'] as int),
 );
 
+Future<T> _withHost<T>({
+  required Iterable<HostedDefinition> workflows,
+  required Future<T> Function(WorkflowHost host) body,
+  PayloadCodecRegistry? codecs,
+  Duration? resultTimeout,
+}) async {
+  final host = await WorkflowHost.inMemory(
+    workflows: workflows,
+    codecs: codecs,
+    resultTimeout: resultTimeout,
+  );
+  try {
+    return await body(host);
+  } finally {
+    await host.close();
+  }
+}
+
 HostedWorkflow<int, int> doubleWorkflow({String name = 'double'}) =>
-    HostedWorkflow(name: name, run: (_, value) async => value * 2);
+    HostedWorkflow(name: name, run: (_, value) => value * 2);
 
 void main() {
   test('typed DTO inputs/results and nullable checkpoint replay', () async {
@@ -41,7 +58,7 @@ void main() {
         return Receipt(input.total + 1);
       },
     );
-    await WorkflowHost.run<void>(
+    await _withHost<void>(
       workflows: [workflow],
       body: (host) async {
         final result = await host.execute(workflow, Receipt(41));
@@ -53,7 +70,7 @@ void main() {
 
   test('multiple submissions reuse a host and keep independent ids', () async {
     final workflow = doubleWorkflow();
-    await WorkflowHost.run<void>(
+    await _withHost<void>(
       workflows: [workflow],
       body: (host) async {
         final runs = await Future.wait([
@@ -82,7 +99,7 @@ void main() {
         ),
         run: (_, value) async => value,
       );
-      await WorkflowHost.run<void>(
+      await _withHost<void>(
         workflows: [nullable, broken],
         body: (host) async {
           expect(await host.execute(nullable, 0), isNull);
@@ -115,7 +132,7 @@ void main() {
         run: (flow, _) =>
             flow.step<int>('fail', () => throw StateError('deliberate')),
       );
-      await WorkflowHost.run<void>(
+      await _withHost<void>(
         workflows: [workflow],
         body: (host) async {
           final run = await host.submit(workflow, 0);
@@ -181,14 +198,18 @@ void main() {
     final run = await submitted;
     final observed = expectLater(run.result, throwsStateError);
     final closing = host.close();
-    expect(identical(closing, host.close()), isTrue);
-    await expectLater(host.submit(workflow, 4), throwsStateError);
+    final repeatedClose = host.close();
+    await expectLater(
+      Future<void>.sync(() => host.submit(workflow, 4)),
+      throwsStateError,
+    );
     var closed = false;
     unawaited(closing.then((_) => closed = true));
     expect(closed, isFalse);
     await observed;
     release.complete();
     await closing;
+    await repeatedClose;
     expect(host.isClosed, isTrue);
   });
 
@@ -198,7 +219,7 @@ void main() {
       final workflow = doubleWorkflow();
       late WorkflowHost captured;
       await expectLater(
-        WorkflowHost.run<void>(
+        _withHost<void>(
           workflows: [workflow],
           body: (host) async {
             captured = host;

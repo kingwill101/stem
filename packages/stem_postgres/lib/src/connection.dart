@@ -1,3 +1,5 @@
+import 'dart:async';
+
 // Public constructor names intentionally initialize private implementation
 // fields to preserve the package API.
 // ignore_for_file: prefer_initializing_formals
@@ -32,6 +34,7 @@ class PostgresConnections {
 
   static final Expando<_TransactionQueue> _queuesByDataSource =
       Expando<_TransactionQueue>();
+  static final Object _transactionScopeZoneKey = Object();
 
   /// Wraps an existing data source and runs migrations before use.
   ///
@@ -100,7 +103,19 @@ class PostgresConnections {
   Future<T> runInTransaction<T>(
     Future<T> Function(QueryContext context) action, {
     String operation = 'transaction',
-  }) async {
+  }) {
+    final inheritedScope = Zone.current[_transactionScopeZoneKey];
+    if (inheritedScope is _TransactionScope &&
+        identical(inheritedScope.queue, _transactionQueueRef)) {
+      if (!inheritedScope.active) {
+        return Future.error(StateError('Transaction scope has already ended.'));
+      }
+      // The ORM connection cannot safely start a second transaction while its
+      // transaction callback is active. Reuse the current callback so all
+      // writes remain part of the outer transaction.
+      return inheritedScope.admit(() => action(context));
+    }
+
     final listener = _timingListener;
     final queued = listener == null ? null : (Stopwatch()..start());
 
@@ -109,7 +124,7 @@ class PostgresConnections {
       final execution = listener == null ? null : (Stopwatch()..start());
       try {
         await ensureReady();
-        final result = await connection.transaction(() => action(context));
+        final result = await _runAttempt(action);
         _notifyTiming(
           operation: operation,
           queueWait: queueWait,
@@ -125,7 +140,7 @@ class PostgresConnections {
                 message.contains('not been initialized'))) {
           try {
             await ensureReady(forceReopen: true);
-            final result = await connection.transaction(() => action(context));
+            final result = await _runAttempt(action);
             _notifyTiming(
               operation: operation,
               queueWait: queueWait,
@@ -161,6 +176,66 @@ class PostgresConnections {
     final result = _transactionQueueRef.tail.then((_) => run());
     _transactionQueueRef.tail = result.then((_) {}, onError: (_) {});
     return result;
+  }
+
+  /// Admits an operation to the transaction active in the current zone.
+  ///
+  /// This is used by transaction-aware adapters (such as the outbox). Unlike
+  /// merely checking that a transaction is active, admission makes the
+  /// operation part of the transaction lifetime and rollback decision.
+  Future<T> admitTransactionOperation<T>(Future<T> Function() operation) {
+    final scope = Zone.current[_transactionScopeZoneKey];
+    if (scope is! _TransactionScope ||
+        !identical(scope.queue, _transactionQueueRef)) {
+      return Future.error(StateError('No active transaction scope.'));
+    }
+    return scope.admit(operation);
+  }
+
+  Future<T> _runAttempt<T>(
+    Future<T> Function(QueryContext context) action,
+  ) {
+    return connection.transaction(() async {
+      final scope = _TransactionScope(_transactionQueueRef);
+      Object? rootError;
+      StackTrace? rootStack;
+      Object? joinedError;
+      StackTrace? joinedStack;
+      T? result;
+      try {
+        result = await Zone.current
+            .fork(zoneValues: {_transactionScopeZoneKey: scope})
+            .run(() => action(context));
+      } on Object catch (error, stackTrace) {
+        rootError = error;
+        rootStack = stackTrace;
+      } finally {
+        // The drain belongs inside the driver's transaction callback. This
+        // keeps admitted, unawaited work from racing the commit.
+        try {
+          await scope.drain();
+        } on Object catch (error, stackTrace) {
+          joinedError = error;
+          joinedStack = stackTrace;
+        }
+      }
+      // Preserve the callback's error when both it and admitted work failed.
+      final callbackError = rootError;
+      if (callbackError != null) {
+        Error.throwWithStackTrace(
+          callbackError,
+          rootStack ?? StackTrace.current,
+        );
+      }
+      final admittedError = joinedError;
+      if (admittedError != null) {
+        Error.throwWithStackTrace(
+          admittedError,
+          joinedStack ?? StackTrace.current,
+        );
+      }
+      return result as T;
+    });
   }
 
   void _notifyTiming({
@@ -312,4 +387,64 @@ extension on PostgresConnections {
 
 class _TransactionQueue {
   Future<void> tail = Future.value();
+}
+
+class _TransactionScope {
+  _TransactionScope(this.queue);
+
+  final _TransactionQueue queue;
+  bool active = true;
+  final List<_JoinedOperation<dynamic>> _pending = [];
+
+  Future<T> admit<T>(Future<T> Function() operation) {
+    if (!active) {
+      return Future.error(StateError('Transaction scope has already ended.'));
+    }
+    final future = Future<T>.sync(operation);
+    final joinedOperation = _JoinedOperation<T>(future);
+    _pending.add(joinedOperation);
+    unawaited(
+      future.then<void>(
+        (_) {},
+        // Attach an immediate handler so an unawaited admission does not
+        // report an unhandled error before the transaction drains it.
+        onError: (Object error, StackTrace stackTrace) {},
+      ),
+    );
+    return future;
+  }
+
+  Future<void> drain() async {
+    // Drain immutable batches. Work admitted by a batch is placed in the
+    // next batch, allowing children to admit grandchildren to a fixed point.
+    Object? firstError;
+    StackTrace? firstStack;
+    while (true) {
+      final batch = List<_JoinedOperation<dynamic>>.of(_pending);
+      _pending.clear();
+      if (batch.isEmpty) {
+        // This synchronous cutover is deliberately adjacent to the empty
+        // check: no late admission can race the driver's commit.
+        active = false;
+        break;
+      }
+      await Future.wait<void>(
+        batch.map((operation) async {
+          try {
+            await operation.future;
+          } on Object catch (error, stackTrace) {
+            firstError ??= error;
+            firstStack ??= stackTrace;
+          }
+        }),
+      );
+    }
+    if (firstError != null) Error.throwWithStackTrace(firstError!, firstStack!);
+  }
+}
+
+class _JoinedOperation<T> {
+  _JoinedOperation(this.future);
+
+  final Future<T> future;
 }

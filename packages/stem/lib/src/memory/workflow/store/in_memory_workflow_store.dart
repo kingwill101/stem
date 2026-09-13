@@ -1,10 +1,12 @@
 // This package depends on Stem's core internals while avoiding `stem.dart`
 // import cycles created by the compatibility re-exports.
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_journal.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_step_entry.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
@@ -13,13 +15,20 @@ import 'package:stem/src/workflow/core/workflow_watcher.dart';
 /// Simple in-memory [WorkflowStore] used for tests and examples.
 ///
 /// Not safe for production as state is lost on process exit.
-class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
+class InMemoryWorkflowStore
+    implements
+        WorkflowStore,
+        WorkflowRunChanges,
+        FencedWorkflowStore,
+        WorkflowTerminalStore,
+        WorkflowJournalStore {
   /// Creates an in-memory workflow store using the provided [clock].
   InMemoryWorkflowStore({WorkflowClock clock = const SystemWorkflowClock()})
     : _clock = clock;
 
   final WorkflowClock _clock;
-  final _runs = <String, RunState>{};
+  late final _ObservableRuns _runs = _ObservableRuns(_notifyRunChanged);
+  final _runChangeControllers = <String, StreamController<void>>{};
   final _steps = <String, Map<String, Object?>>{};
   final _suspendedTopics = <String, Set<String>>{};
   final _due = SplayTreeMap<DateTime, Set<String>>();
@@ -27,6 +36,141 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   final _watchersByRun = <String, _WatcherRecord>{};
   int _counter = 0;
   int _executionCounter = 0;
+  final _journal =
+      <String, Map<(WorkflowJournalKind, String), WorkflowJournalEntry>>{};
+  final _journalOrder = <String, int>{};
+
+  @override
+  Stream<void> watchRunChanges(String runId) => Stream<void>.multi((listener) {
+    final controller = _runChangeControllers.putIfAbsent(
+      runId,
+      StreamController<void>.broadcast,
+    );
+    final subscription = controller.stream.listen(
+      listener.add,
+      onError: listener.addError,
+      onDone: () => unawaited(listener.close()),
+    );
+    listener.onCancel = () async {
+      await subscription.cancel();
+      if (!controller.hasListener &&
+          identical(_runChangeControllers[runId], controller)) {
+        _runChangeControllers.remove(runId);
+        await controller.close();
+      }
+    };
+  });
+
+  void _notifyRunChanged(String runId) {
+    final controller = _runChangeControllers[runId];
+    if (controller != null && !controller.isClosed) {
+      controller.add(null);
+    }
+  }
+
+  @override
+  Future<WorkflowJournalSnapshot?> readJournal(
+    String runId,
+    WorkflowJournalKind kind,
+    String name,
+  ) async {
+    final run = _readRunState(runId);
+    if (run == null) return null;
+    return WorkflowJournalSnapshot(
+      run: run,
+      entry: _journal[runId]?[(kind, name)],
+    );
+  }
+
+  @override
+  Future<List<WorkflowJournalEntry>> listCompensations(String runId) async {
+    final entries =
+        (_journal[runId]?.values
+                  .where(
+                    (entry) => entry.kind == WorkflowJournalKind.compensation,
+                  )
+                  .toList() ??
+              <WorkflowJournalEntry>[])
+          ..sort((a, b) => b.position!.compareTo(a.position!));
+    return List.unmodifiable(entries);
+  }
+
+  @override
+  Future<bool> commitJournal(
+    WorkflowJournalEntry entry, {
+    required int expectedRevision,
+    required String executionId,
+    WorkflowJournalCheckpoint? checkpoint,
+  }) async {
+    entry.validateWrite(
+      expectedRevision: expectedRevision,
+      checkpoint: checkpoint,
+    );
+    final run = _runs[entry.runId];
+    final requiredStatus = entry.kind == WorkflowJournalKind.step
+        ? WorkflowStatus.running
+        : WorkflowStatus.failed;
+    if (run == null ||
+        run.status != requiredStatus ||
+        run.executionId != executionId ||
+        executionId.isEmpty) {
+      return false;
+    }
+    final key = (entry.kind, entry.name);
+    final records = _journal[entry.runId];
+    final previous = records?[key];
+    if ((previous?.revision ?? 0) != expectedRevision ||
+        (entry.kind == WorkflowJournalKind.compensation && previous == null)) {
+      return false;
+    }
+    // Validate/copy before publishing any part of the atomic mutation.
+    final data = _copyJournalValue(entry.data)! as Map<String, Object?>;
+    final value = _copyJournalValue(checkpoint?.value);
+    final registration = checkpoint?.compensation;
+    final registrationData = registration == null
+        ? null
+        : _copyJournalValue(registration.toJournalData())!
+              as Map<String, Object?>;
+    final target = _journal.putIfAbsent(entry.runId, () => {});
+    target[key] = WorkflowJournalEntry(
+      runId: entry.runId,
+      kind: entry.kind,
+      name: entry.name,
+      revision: entry.revision,
+      data: data,
+      position: previous?.position,
+    );
+    if (checkpoint != null) {
+      _steps.putIfAbsent(entry.runId, () => {})[entry.name] = value;
+      final compensationKey = (WorkflowJournalKind.compensation, entry.name);
+      if (registrationData != null && !target.containsKey(compensationKey)) {
+        final position = (_journalOrder[entry.runId] ?? 0) + 1;
+        _journalOrder[entry.runId] = position;
+        target[compensationKey] = WorkflowJournalEntry(
+          runId: entry.runId,
+          kind: WorkflowJournalKind.compensation,
+          name: entry.name,
+          revision: 1,
+          position: position,
+          data: registrationData,
+        );
+      }
+    }
+    _runs[entry.runId] = run.copyWith(updatedAt: _clock.now());
+    return true;
+  }
+
+  static Object? _copyJournalValue(Object? value) {
+    if (value is Map<String, Object?>) {
+      return Map<String, Object?>.unmodifiable(
+        value.map((key, item) => MapEntry(key, _copyJournalValue(item))),
+      );
+    }
+    if (value is List) {
+      return List<Object?>.unmodifiable(value.map(_copyJournalValue));
+    }
+    return value;
+  }
 
   Map<String, Object?> _prepareSuspensionData(
     Map<String, Object?>? source, {
@@ -75,13 +219,22 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   /// Removes watcher bookkeeping for a run across run/topic maps.
   void _removeWatcherForRun(String runId) {
     final record = _watchersByRun.remove(runId);
-    if (record == null) return;
-    final topicMap = _watchersByTopic[record.topic];
-    topicMap?.remove(runId);
-    if (topicMap != null && topicMap.isEmpty) {
-      _watchersByTopic.remove(record.topic);
+    final topics = <String>{
+      if (record != null) record.topic,
+      if (_runs[runId]?.waitTopic case final String topic) topic,
+    };
+    for (final topic in topics) {
+      final topicMap = _watchersByTopic[topic];
+      topicMap?.remove(runId);
+      if (topicMap != null && topicMap.isEmpty) {
+        _watchersByTopic.remove(topic);
+      }
+      final suspended = _suspendedTopics[topic];
+      suspended?.remove(runId);
+      if (suspended != null && suspended.isEmpty) {
+        _suspendedTopics.remove(topic);
+      }
     }
-    _suspendedTopics[record.topic]?.remove(runId);
   }
 
   @override
@@ -118,7 +271,9 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
 
   @override
   /// Returns the run state with an updated step cursor, if present.
-  Future<RunState?> get(String runId) async {
+  Future<RunState?> get(String runId) async => _readRunState(runId);
+
+  RunState? _readRunState(String runId) {
     final state = _runs[runId];
     if (state == null) return null;
     final steps = _steps[runId];
@@ -159,7 +314,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     Map<String, Object?>? data,
   }) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return;
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.suspended,
       cursor: state.cursor,
@@ -179,8 +334,24 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    _suspendOnTopic(
+      runId,
+      stepName,
+      topic,
+      deadline: deadline,
+      data: data,
+    );
+  }
+
+  bool _suspendOnTopic(
+    String runId,
+    String stepName,
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return false;
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
@@ -198,6 +369,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     if (deadline != null) {
       _due.putIfAbsent(deadline, () => <String>{}).add(runId);
     }
+    return true;
   }
 
   @override
@@ -214,13 +386,15 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       deadline: deadline,
       topic: topic,
     );
-    await suspendOnTopic(
+    if (!_suspendOnTopic(
       runId,
       stepName,
       topic,
       deadline: deadline,
       data: metadata,
-    );
+    )) {
+      return;
+    }
     final record = _WatcherRecord(
       runId: runId,
       stepName: stepName,
@@ -238,7 +412,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   /// Marks a run as actively executing at [stepName].
   Future<void> markRunning(String runId, {String? stepName}) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return;
     _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.running,
@@ -249,8 +423,13 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   @override
   /// Marks a run as completed and stores the final result.
   Future<void> markCompleted(String runId, Object? result) async {
+    await completeIfActive(runId, result);
+  }
+
+  @override
+  Future<bool> completeIfActive(String runId, Object? result) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return false;
     _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.completed,
@@ -262,6 +441,10 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       leaseExpiresAt: null,
       updatedAt: _clock.now(),
     );
+    for (final entry in _due.values) {
+      entry.remove(runId);
+    }
+    return true;
   }
 
   @override
@@ -272,13 +455,21 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     bool terminal = false,
   }) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return;
     if (terminal) {
       _removeWatcherForRun(runId);
+      for (final entry in _due.values) {
+        entry.remove(runId);
+      }
     }
     _runs[runId] = state.copyWith(
       status: terminal ? WorkflowStatus.failed : WorkflowStatus.running,
       lastError: {'error': error.toString(), 'stack': stack.toString()},
+      resumeAt: terminal ? null : state.resumeAt,
+      waitTopic: terminal ? null : state.waitTopic,
+      suspensionData: terminal
+          ? const <String, Object?>{}
+          : state.suspensionData,
       ownerId: terminal ? null : state.ownerId,
       leaseExpiresAt: terminal ? null : state.leaseExpiresAt,
       updatedAt: _clock.now(),
@@ -289,7 +480,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   /// Marks a run as resumed, optionally merging resume data.
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return;
     _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.running,
@@ -528,7 +719,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       if (record == null) continue;
       _watchersByRun.remove(runId);
       final state = _runs[runId];
-      if (state == null) {
+      if (state == null || state.isTerminal) {
         final topicSet = _suspendedTopics[topic];
         topicSet?.remove(runId);
         if (topicSet != null && topicSet.isEmpty) {
@@ -594,8 +785,13 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   @override
   /// Cancels a run and records an optional cancellation [reason].
   Future<void> cancel(String runId, {String? reason}) async {
+    await cancelIfActive(runId, reason: reason);
+  }
+
+  @override
+  Future<bool> cancelIfActive(String runId, {String? reason}) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return false;
     _removeWatcherForRun(runId);
     final now = _clock.now();
     final cancellationData = <String, Object?>{
@@ -623,6 +819,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       }
     });
     emptyTopics.forEach(_suspendedTopics.remove);
+    return true;
   }
 
   @override
@@ -660,6 +857,10 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       }
     }
     _steps[runId] = LinkedHashMap.fromEntries(retained);
+    final retainedNames = retained.map((entry) => entry.key).toSet();
+    _journal[runId]?.removeWhere(
+      (_, entry) => !retainedNames.contains(entry.name),
+    );
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.suspended,
       cursor: targetIndex,
@@ -745,6 +946,42 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       index += 1;
     }
     return entries;
+  }
+}
+
+/// A run map that makes every replacement/removal observable through one path.
+class _ObservableRuns extends MapBase<String, RunState> {
+  _ObservableRuns(this._onChange);
+
+  final void Function(String runId) _onChange;
+  final _values = <String, RunState>{};
+
+  @override
+  RunState? operator [](Object? key) => _values[key];
+
+  @override
+  void operator []=(String key, RunState value) {
+    _values[key] = value;
+    _onChange(key);
+  }
+
+  @override
+  void clear() {
+    final keys = _values.keys.toList(growable: false);
+    _values.clear();
+    keys.forEach(_onChange);
+  }
+
+  @override
+  Iterable<String> get keys => _values.keys;
+
+  @override
+  RunState? remove(Object? key) {
+    if (key is! String) return null;
+    if (!_values.containsKey(key)) return null;
+    final value = _values.remove(key)!;
+    _onChange(key);
+    return value;
   }
 }
 

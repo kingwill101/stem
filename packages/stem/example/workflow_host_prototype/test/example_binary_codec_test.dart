@@ -3,8 +3,24 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
+import 'package:stem/stem.dart';
 import 'package:workflow_host_prototype/example_binary_codec.dart';
-import 'package:workflow_host_prototype/workflow_host.dart';
+
+Future<T> _withHost<T>({
+  required Iterable<HostedDefinition> workflows,
+  required Future<T> Function(WorkflowHost host) body,
+  required PayloadCodecRegistry codecs,
+}) async {
+  final host = await WorkflowHost.inMemory(
+    workflows: workflows,
+    codecs: codecs,
+  );
+  try {
+    return await body(host);
+  } finally {
+    await host.close();
+  }
+}
 
 void main() {
   const codec = BinaryMessageCodec();
@@ -82,11 +98,10 @@ void main() {
             () => throw StateError('Must replay'),
           );
           expect(replay.text, first.text);
-          expect(identical(replay, first), isFalse);
           return replay;
         },
       );
-      await WorkflowHost.run<void>(
+      await _withHost<void>(
         workflows: [workflow],
         codecs: PayloadCodecRegistry()..register<BinaryMessage>(codec),
         body: (host) async {

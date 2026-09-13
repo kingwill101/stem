@@ -2,6 +2,31 @@
 
 ## 0.5.0
 
+- Validate journal write arguments consistently across bundled stores. Malformed
+  revisions, blank identities, and invalid checkpoint combinations throw
+  `ArgumentError` rather than being retried as optimistic-concurrency conflicts.
+- Consolidate due-run resumption in the runtime. `StemWorkflowApp.resumeDueRuns`
+  now enqueues continuations; manual drivers can opt out through the runtime's
+  `enqueue: false` option. Share lifecycle bookkeeping and checkpoint writes,
+  and retire the example-only host implementation in favor of the core host.
+- Add journal-backed checkpoint retry policies and named, result-aware
+  compensation. Persist retry budgets/ETAs, lease cleanup independently, and
+  expose progress plus explicit exhausted-budget extension without resetting
+  lifetime attempts. Automatic cleanup follows terminal failure, not cancellation.
+- Add optional complete run-change notifications for native observation, with
+  in-memory support and polling fallback for other stores.
+- Export `PayloadCodecDefn` for explicit library-local generated codec bindings,
+  including standard codecs for concrete generic DTO and collection types.
+- Add bounded, coalesced host recovery for registered runnable runs, with
+  immutable enqueue/skip/error reports and admitted-operation cleanup.
+- Preserve nullable hosted results through the configured codec using a
+  versioned final-result envelope. Add atomic `WorkflowTerminalStore`
+  completion/cancellation transitions and suppress rejected terminal signals.
+- Add typed `WorkflowHost` definitions and handles over the existing runtime,
+  with owned/borrowed app lifecycle, persisted-run reattachment, shared snapshot
+  observation, registry-backed codecs, durable sleep and typed event waits.
+  Distinguish event deadlines using runtime resume metadata rather than payload
+  fields, and verify nullable event checkpoint replay.
 - Settle unrecoverable persisted terminal-failure markers through dead-lettering
   or queue-only discard instead of leaving their deliveries in flight. Preserve
   retryable callback failures and recovery of a later failed attempt from an

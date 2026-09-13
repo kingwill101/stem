@@ -9,6 +9,14 @@ void main() {
     adapterName: 'in-memory',
     factory: inMemoryFactory,
   );
+  runWorkflowTerminalContractTests(
+    adapterName: 'in-memory',
+    factory: inMemoryFactory,
+  );
+  runWorkflowJournalContractTests(
+    adapterName: 'in-memory',
+    factory: inMemoryFactory,
+  );
   runWorkflowExecutionFenceContractTests(
     adapterName: 'in-memory',
     factory: inMemoryFactory,

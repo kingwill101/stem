@@ -7,8 +7,23 @@ import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/workflow/core/flow_context.dart' show FlowContext;
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_execution_context.dart';
+import 'package:stem/src/workflow/core/workflow_journal.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
+
+/// Optional runtime-provided resume information for a script checkpoint.
+///
+/// Unlike [WorkflowScriptStepContext.takeResumeData], these flags describe
+/// control metadata rather than user event data. Consuming the payload does
+/// not clear them. Existing custom context implementations need not implement
+/// this capability.
+abstract interface class WorkflowScriptResumeDetails {
+  /// Whether this checkpoint is re-entering a persisted suspension.
+  bool get isResuming;
+
+  /// Whether an event watcher resumed because its deadline was due.
+  bool get isEventTimeout;
+}
 
 /// Runtime context exposed to workflow scripts. Implementations are provided by
 /// the workflow runtime so scripts can execute with durable semantics.
@@ -30,6 +45,21 @@ abstract class WorkflowScriptContext {
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
+  });
+}
+
+/// Optional journal-backed checkpoint retry capability.
+// An optional runtime capability, not a free function on every legacy context.
+// ignore: one_member_abstracts
+abstract interface class WorkflowScriptJournalContext {
+  /// Executes a checkpoint with a retry budget persisted independently of
+  /// workflow task delivery attempts.
+  Future<T> stepWithRetry<T>(
+    String name,
+    FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
+    required WorkflowRetryPolicy retryPolicy,
+    bool autoVersion = false,
+    WorkflowCompensationRegistration? Function(T result)? compensationForResult,
   });
 }
 

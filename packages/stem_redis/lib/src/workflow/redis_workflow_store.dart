@@ -10,7 +10,12 @@ import 'package:stem/stem.dart';
 import 'package:uuid/uuid.dart';
 
 /// Redis-backed implementation of [WorkflowStore].
-class RedisWorkflowStore implements WorkflowStore, FencedWorkflowStore {
+class RedisWorkflowStore
+    implements
+        WorkflowStore,
+        WorkflowTerminalStore,
+        FencedWorkflowStore,
+        WorkflowJournalStore {
   RedisWorkflowStore._(
     this._connection,
     this._command, {
@@ -88,6 +93,12 @@ class RedisWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   String _runKey(String id) => '$namespace:wf:$id';
   String _stepsKey(String id) => '$namespace:wf:$id:steps';
   String _orderKey(String id) => '$namespace:wf:$id:order';
+  String _journalKey(String id, WorkflowJournalKind kind) =>
+      '$namespace:wf:$id:journal:${kind.name}';
+  String _compensationOrderKey(String id) =>
+      '$namespace:wf:$id:journal:compensation:order';
+  String _compensationSequenceKey(String id) =>
+      '$namespace:wf:$id:journal:compensation:sequence';
   String _topicKey(String topic) => '$namespace:wf:topic:$topic';
   String _dueKey() => '$namespace:wf:due';
   String _watchersHashKey() => '$namespace:wf:watchers';
@@ -132,6 +143,8 @@ local nowScore = tonumber(ARGV[5])
 local watcherPayload = ARGV[6]
 local status = ARGV[7]
 local topic = ARGV[8]
+local currentStatus = redis.call('HGET', runKey, 'status')
+if currentStatus ~= ARGV[9] and currentStatus ~= ARGV[10] then return 0 end
 
 local existing = redis.call('HGET', watchersHash, runId)
 if existing then
@@ -184,6 +197,8 @@ for _, runId in ipairs(members) do
   local rawWatcher = redis.call('HGET', watchersHash, runId)
   if rawWatcher then
     local watcher = cjson.decode(rawWatcher)
+    local runKey = runKeyPrefix .. runId
+    local status = redis.call('HGET', runKey, 'status')
     redis.call('HDEL', watchersHash, runId)
     local watcherTopicKey = watcher['watchersTopicKey'] or watchersTopicKey
     local watcherTopicSet = watcher['topicSetKey'] or topicSetKey
@@ -197,19 +212,20 @@ for _, runId in ipairs(members) do
     metadata['step'] = metadata['step'] or watcher['stepName']
     metadata['iterationStep'] = metadata['iterationStep'] or watcher['stepName']
     metadata['deliveredAt'] = nowIso
-    local runKey = runKeyPrefix .. runId
-    redis.call('HSET', runKey,
-      'status', runningStatus,
-      'wait_topic', '',
-      'resume_at', '',
-      'suspension_data', cjson.encode(metadata),
-      'updated_at', nowIso)
-    table.insert(results, cjson.encode({
-      runId = runId,
-      stepName = watcher['stepName'],
-      topic = topic,
-      resumeData = metadata
-    }))
+    if status == runningStatus or status == ARGV[7] then
+      redis.call('HSET', runKey,
+        'status', runningStatus,
+        'wait_topic', '',
+        'resume_at', '',
+        'suspension_data', cjson.encode(metadata),
+        'updated_at', nowIso)
+      table.insert(results, cjson.encode({
+        runId = runId,
+        stepName = watcher['stepName'],
+        topic = topic,
+        resumeData = metadata
+      }))
+    end
   else
     redis.call('ZREM', watchersTopicKey, runId)
     redis.call('SREM', topicSetKey, runId)
@@ -217,29 +233,6 @@ for _, runId in ipairs(members) do
   end
 end
 return results
-''';
-
-  static const _luaRemoveWatcher = '''
-local watchersHash = KEYS[1]
-local dueKey = KEYS[2]
-
-local runId = ARGV[1]
-
-local existing = redis.call('HGET', watchersHash, runId)
-if not existing then
-  return 0
-end
-
-local watcher = cjson.decode(existing)
-redis.call('HDEL', watchersHash, runId)
-if watcher['watchersTopicKey'] then
-  redis.call('ZREM', watcher['watchersTopicKey'], runId)
-end
-if watcher['topicSetKey'] then
-  redis.call('SREM', watcher['topicSetKey'], runId)
-end
-redis.call('ZREM', dueKey, runId)
-return 1
 ''';
 
   static const _luaCreateRun = '''
@@ -266,6 +259,121 @@ if ARGV[8] ~= '' then
   redis.call('HSET', runKey, 'cancellation_policy', ARGV[8])
 end
 
+return 1
+''';
+
+  // Shared by ordinary checkpoints and fenced journal commits.
+  static const _luaWriteCheckpoint = '''
+local function writeCheckpoint(stepsKey, orderKey, name, value)
+  redis.call('HSET', stepsKey, name, value)
+  if not redis.call('ZSCORE', orderKey, name) then
+    redis.call('ZADD', orderKey, redis.call('ZCARD', orderKey), name)
+  end
+end
+''';
+
+  static const _luaSaveStep =
+      '''
+$_luaWriteCheckpoint
+if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
+writeCheckpoint(KEYS[2], KEYS[3], ARGV[1], ARGV[2])
+redis.call('HSET', KEYS[1], 'updated_at', ARGV[3])
+return 1
+''';
+
+  static const _luaCommitJournal =
+      '''
+$_luaWriteCheckpoint
+local runKey = KEYS[1]
+local journalKey = KEYS[2]
+local compensationKey = KEYS[3]
+local compensationOrderKey = KEYS[4]
+local compensationSequenceKey = KEYS[5]
+local kind = ARGV[1]
+local name = ARGV[2]
+local expected = tonumber(ARGV[3])
+local newRevision = tonumber(ARGV[4])
+local executionId = ARGV[5]
+local data = ARGV[6]
+local checkpointValue = ARGV[7]
+local hasCheckpoint = ARGV[8] == '1'
+local hasCompensation = ARGV[9] == '1'
+local runningStatus = ARGV[10]
+local failedStatus = ARGV[11]
+local status = redis.call('HGET', runKey, 'status')
+if (kind == 'step' and status ~= runningStatus) or
+   (kind == 'compensation' and status ~= failedStatus) then return 0 end
+if executionId == '' or redis.call('HGET', runKey, 'execution_id') ~= executionId then return 0 end
+local raw = redis.call('HGET', journalKey, name)
+local currentRevision = 0
+if raw then currentRevision = tonumber(cjson.decode(raw)['revision']) or 0 end
+if currentRevision ~= expected or newRevision ~= expected + 1 then return 0 end
+if kind == 'compensation' and not raw then return 0 end
+local record = cjson.decode(data)
+if kind == 'compensation' and raw then
+  record['position'] = cjson.decode(raw)['position']
+end
+redis.call('HSET', journalKey, name, cjson.encode(record))
+if kind == 'step' and hasCheckpoint then
+  writeCheckpoint(KEYS[6], KEYS[7], name, checkpointValue)
+end
+if kind == 'step' and hasCompensation then
+  if not redis.call('HGET', compensationKey, name) then
+    local position = redis.call('INCR', compensationSequenceKey)
+    local compensation = cjson.decode(ARGV[12])
+    compensation['position'] = position
+    redis.call('HSET', compensationKey, name, cjson.encode(compensation))
+    redis.call('ZADD', compensationOrderKey, position, name)
+  end
+end
+redis.call('HSET', runKey, 'updated_at', ARGV[13])
+return 1
+''';
+
+  static const _luaRewindJournal = '''
+local names = redis.call('ZRANGE', KEYS[3], 0, -1)
+local indices = {}
+local nextIndex = 0
+for _, name in ipairs(names) do
+  local hash = string.find(name, '#', 1, true)
+  local base = hash and string.sub(name, 1, hash - 1) or name
+  if indices[base] == nil then
+    indices[base] = nextIndex
+    nextIndex = nextIndex + 1
+  end
+end
+local target = indices[ARGV[1]]
+if target == nil then return 0 end
+local keep = {}
+for _, name in ipairs(names) do
+  local hash = string.find(name, '#', 1, true)
+  local base = hash and string.sub(name, 1, hash - 1) or name
+  if indices[base] < target then
+    keep[name] = true
+  else
+    redis.call('HDEL', KEYS[2], name)
+    redis.call('ZREM', KEYS[3], name)
+  end
+end
+for _, journalKey in ipairs({KEYS[4], KEYS[5]}) do
+  for _, name in ipairs(redis.call('HKEYS', journalKey)) do
+    if not keep[name] then
+      redis.call('HDEL', journalKey, name)
+      redis.call('ZREM', KEYS[6], name)
+    end
+  end
+end
+local watcher = redis.call('HGET', KEYS[7], ARGV[2])
+if watcher then
+  local parsed = cjson.decode(watcher)
+  redis.call('HDEL', KEYS[7], ARGV[2])
+  if parsed['watchersTopicKey'] then redis.call('ZREM', parsed['watchersTopicKey'], ARGV[2]) end
+  if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], ARGV[2]) end
+end
+redis.call('ZREM', KEYS[8], ARGV[2])
+redis.call('HSET', KEYS[1], 'status', ARGV[3], 'wait_topic', '',
+  'resume_at', '', 'owner_id', '', 'lease_expires_at', '',
+  'execution_id', '', 'suspension_data', ARGV[4])
 return 1
 ''';
 
@@ -406,6 +514,7 @@ return 1
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
 local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
 local executionId = ARGV[1]
 local failedStatus = ARGV[2]
 local status = redis.call('HGET', runKey, 'status')
@@ -425,10 +534,170 @@ if watcher then
   if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], runId) end
 end
 redis.call('ZREM', dueKey, runId)
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+if waitTopic and waitTopic ~= '' then
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
+end
 redis.call('HSET', runKey, 'status', failedStatus, 'last_error', ARGV[6],
   'owner_id', '', 'lease_expires_at', '', 'resume_at', '', 'wait_topic', '',
   'updated_at', ARGV[7])
 return 0
+''';
+
+  static const _luaCompleteIfActive = '''
+local runKey = KEYS[1]
+local watchersHash = KEYS[2]
+local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
+local runId = ARGV[1]
+local runningStatus = ARGV[2]
+local suspendedStatus = ARGV[3]
+local terminalStatus = ARGV[4]
+local status = redis.call('HGET', runKey, 'status')
+if status ~= runningStatus and status ~= suspendedStatus then return 0 end
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+local watcher = redis.call('HGET', watchersHash, runId)
+if watcher then
+  local parsed = cjson.decode(watcher)
+  redis.call('HDEL', watchersHash, runId)
+  if parsed['watchersTopicKey'] then redis.call('ZREM', parsed['watchersTopicKey'], runId) end
+  if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], runId) end
+end
+redis.call('ZREM', dueKey, runId)
+if waitTopic and waitTopic ~= '' then
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
+end
+redis.call('HSET', runKey, 'status', terminalStatus, 'result', ARGV[5],
+  'suspension_data', '', 'wait_topic', '', 'resume_at', '',
+  'owner_id', '', 'lease_expires_at', '', 'updated_at', ARGV[6])
+return 1
+''';
+
+  static const _luaCancelIfActive = '''
+local runKey = KEYS[1]
+local watchersHash = KEYS[2]
+local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
+local runId = ARGV[1]
+local runningStatus = ARGV[2]
+local suspendedStatus = ARGV[3]
+local terminalStatus = ARGV[4]
+local status = redis.call('HGET', runKey, 'status')
+if status ~= runningStatus and status ~= suspendedStatus then return 0 end
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+local watcher = redis.call('HGET', watchersHash, runId)
+if watcher then
+  local parsed = cjson.decode(watcher)
+  redis.call('HDEL', watchersHash, runId)
+  if parsed['watchersTopicKey'] then redis.call('ZREM', parsed['watchersTopicKey'], runId) end
+  if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], runId) end
+end
+redis.call('ZREM', dueKey, runId)
+if waitTopic and waitTopic ~= '' then
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
+end
+redis.call('HSET', runKey, 'status', terminalStatus, 'cancellation_data', ARGV[5],
+  'suspension_data', '', 'wait_topic', '', 'resume_at', '',
+  'owner_id', '', 'lease_expires_at', '', 'execution_id', '',
+  'updated_at', ARGV[6])
+return 1
+''';
+
+  static const _luaMarkRunning = '''
+local runKey = KEYS[1]
+local watchersHash = KEYS[2]
+local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
+local runId = ARGV[1]
+local status = redis.call('HGET', runKey, 'status')
+if status ~= ARGV[2] and status ~= ARGV[3] then return 0 end
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+local watcher = redis.call('HGET', watchersHash, runId)
+if watcher then
+  local parsed = cjson.decode(watcher)
+  redis.call('HDEL', watchersHash, runId)
+  if parsed['watchersTopicKey'] then redis.call('ZREM', parsed['watchersTopicKey'], runId) end
+  if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], runId) end
+end
+redis.call('ZREM', dueKey, runId)
+if waitTopic and waitTopic ~= '' then
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
+end
+redis.call('HSET', runKey, 'status', ARGV[4], 'resume_at', '', 'wait_topic', '', 'updated_at', ARGV[5])
+return 1
+''';
+
+  static const _luaMarkResumed = '''
+local runKey = KEYS[1]
+local watchersHash = KEYS[2]
+local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
+local runId = ARGV[1]
+local status = redis.call('HGET', runKey, 'status')
+if status ~= ARGV[2] and status ~= ARGV[3] then return 0 end
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+local watcher = redis.call('HGET', watchersHash, runId)
+if watcher then
+  local parsed = cjson.decode(watcher)
+  redis.call('HDEL', watchersHash, runId)
+  if parsed['watchersTopicKey'] then redis.call('ZREM', parsed['watchersTopicKey'], runId) end
+  if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], runId) end
+end
+redis.call('ZREM', dueKey, runId)
+if waitTopic and waitTopic ~= '' then
+  redis.call('SREM', topicKeyPrefix .. waitTopic, runId)
+end
+redis.call('HSET', runKey, 'status', ARGV[4], 'wait_topic', '', 'resume_at', '',
+  'suspension_data', ARGV[5], 'execution_id', '', 'owner_id', '',
+  'lease_expires_at', '', 'updated_at', ARGV[6])
+return 1
+''';
+
+  static const _luaSuspend = '''
+local runKey = KEYS[1]
+local dueKey = KEYS[2]
+local topicSetKey = KEYS[3]
+local status = redis.call('HGET', runKey, 'status')
+if status ~= ARGV[1] and status ~= ARGV[2] then return 0 end
+redis.call('HSET', runKey, 'status', ARGV[3], 'wait_topic', ARGV[4],
+  'resume_at', ARGV[5], 'suspension_data', ARGV[6], 'updated_at', ARGV[7])
+if ARGV[5] ~= '' then
+  redis.call('ZADD', dueKey, ARGV[5], ARGV[8])
+else
+  redis.call('ZREM', dueKey, ARGV[8])
+end
+if ARGV[4] ~= '' then redis.call('SADD', topicSetKey, ARGV[8]) end
+return 1
+''';
+
+  static const _luaMarkFailed = '''
+local runKey = KEYS[1]
+local watchersHash = KEYS[2]
+local dueKey = KEYS[3]
+local topicKeyPrefix = KEYS[4]
+local status = redis.call('HGET', runKey, 'status')
+if not status then return 0 end
+if status ~= ARGV[1] and status ~= ARGV[2] then return 0 end
+if ARGV[4] ~= '1' then
+  redis.call('HSET', runKey, 'last_error', ARGV[5], 'updated_at', ARGV[6])
+  return 1
+end
+local watcher = redis.call('HGET', watchersHash, ARGV[7])
+if watcher then
+  local parsed = cjson.decode(watcher)
+  redis.call('HDEL', watchersHash, ARGV[7])
+  if parsed['watchersTopicKey'] then redis.call('ZREM', parsed['watchersTopicKey'], ARGV[7]) end
+  if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], ARGV[7]) end
+end
+redis.call('ZREM', dueKey, ARGV[7])
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+if waitTopic and waitTopic ~= '' then
+  redis.call('SREM', topicKeyPrefix .. waitTopic, ARGV[7])
+end
+redis.call('HSET', runKey, 'status', ARGV[3], 'last_error', ARGV[5],
+  'owner_id', '', 'lease_expires_at', '', 'resume_at', '', 'wait_topic', '',
+  'updated_at', ARGV[6])
+return 1
 ''';
 
   String _baseStepName(String name) {
@@ -542,14 +811,17 @@ return 0
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
     final nowIso = _clock.now().toIso8601String();
-    await _send(['HSET', _stepsKey(runId), stepName, jsonEncode(value)]);
-    final score =
-        await _send(['ZSCORE', _orderKey(runId), stepName]) as String?;
-    if (score == null) {
-      final next = await _send(['ZCARD', _orderKey(runId)]) as int? ?? 0;
-      await _send(['ZADD', _orderKey(runId), next.toString(), stepName]);
-    }
-    await _send(['HSET', _runKey(runId), 'updated_at', nowIso]);
+    await _send([
+      'EVAL',
+      _luaSaveStep,
+      '3',
+      _runKey(runId),
+      _stepsKey(runId),
+      _orderKey(runId),
+      stepName,
+      jsonEncode(value),
+      nowIso,
+    ]);
   }
 
   @override
@@ -562,23 +834,19 @@ return 0
     final metadata = _prepareSuspensionData(data, resumeAt: when);
     final now = _clock.now().toIso8601String();
     await _send([
-      'HSET',
+      'EVAL',
+      _luaSuspend,
+      '3',
       _runKey(runId),
-      'status',
-      WorkflowStatus.suspended.name,
-      'resume_at',
-      when.millisecondsSinceEpoch.toString(),
-      'wait_topic',
-      '',
-      'suspension_data',
-      jsonEncode(metadata),
-      'updated_at',
-      now,
-    ]);
-    await _send([
-      'ZADD',
       _dueKey(),
+      _topicKey(''),
+      WorkflowStatus.running.name,
+      WorkflowStatus.suspended.name,
+      WorkflowStatus.suspended.name,
+      '',
       when.millisecondsSinceEpoch.toString(),
+      jsonEncode(metadata),
+      now,
       runId,
     ]);
   }
@@ -599,28 +867,21 @@ return 0
     );
     final now = _clock.now().toIso8601String();
     await _send([
-      'HSET',
+      'EVAL',
+      _luaSuspend,
+      '3',
       _runKey(runId),
-      'status',
+      _dueKey(),
+      _topicKey(topic),
+      WorkflowStatus.running.name,
       WorkflowStatus.suspended.name,
-      'wait_topic',
+      WorkflowStatus.suspended.name,
       topic,
-      'resume_at',
       deadline?.millisecondsSinceEpoch.toString() ?? '',
-      'suspension_data',
       jsonEncode(metadata),
-      'updated_at',
       now,
+      runId,
     ]);
-    await _send(['SADD', _topicKey(topic), runId]);
-    if (deadline != null) {
-      await _send([
-        'ZADD',
-        _dueKey(),
-        deadline.millisecondsSinceEpoch.toString(),
-        runId,
-      ]);
-    }
   }
 
   @override
@@ -654,13 +915,6 @@ return 0
       'watchersTopicKey': _watchersTopicKey(topic),
       'topicSetKey': _topicKey(topic),
     });
-    await suspendOnTopic(
-      runId,
-      stepName,
-      topic,
-      deadline: deadline,
-      data: metadata,
-    );
     await _send([
       'EVAL',
       _luaRegisterWatcher,
@@ -678,49 +932,54 @@ return 0
       watcherPayload,
       WorkflowStatus.suspended.name,
       topic,
+      WorkflowStatus.running.name,
+      WorkflowStatus.suspended.name,
     ]);
   }
 
   @override
   Future<void> markRunning(String runId, {String? stepName}) async {
     final now = _clock.now().toIso8601String();
-    await _removeWatcher(runId);
     await _send([
-      'HSET',
+      'EVAL',
+      _luaMarkRunning,
+      '4',
       _runKey(runId),
-      'status',
+      _watchersHashKey(),
+      _dueKey(),
+      _topicKey(''),
+      runId,
       WorkflowStatus.running.name,
-      'resume_at',
-      '',
-      'wait_topic',
-      '',
-      'updated_at',
+      WorkflowStatus.suspended.name,
+      WorkflowStatus.running.name,
       now,
     ]);
-    await _send(['ZREM', _dueKey(), runId]);
   }
 
   @override
   Future<void> markCompleted(String runId, Object? result) async {
+    await completeIfActive(runId, result);
+  }
+
+  @override
+  Future<bool> completeIfActive(String runId, Object? result) async {
     final now = _clock.now().toIso8601String();
-    await _removeWatcher(runId);
-    await _send([
-      'HSET',
+    final response = await _send([
+      'EVAL',
+      _luaCompleteIfActive,
+      '4',
       _runKey(runId),
-      'status',
+      _watchersHashKey(),
+      _dueKey(),
+      _topicKey(''),
+      runId,
+      WorkflowStatus.running.name,
+      WorkflowStatus.suspended.name,
       WorkflowStatus.completed.name,
-      'result',
       jsonEncode(result),
-      'suspension_data',
-      '',
-      'owner_id',
-      '',
-      'lease_expires_at',
-      '',
-      'updated_at',
       now,
     ]);
-    await _send(['ZREM', _dueKey(), runId]);
+    return response == 1 || response == '1';
   }
 
   @override
@@ -731,61 +990,42 @@ return 0
     bool terminal = false,
   }) async {
     final now = _clock.now().toIso8601String();
-    if (terminal) {
-      await _removeWatcher(runId);
-    }
     await _send([
-      'HSET',
+      'EVAL',
+      _luaMarkFailed,
+      '4',
       _runKey(runId),
-      'status',
-      (terminal ? WorkflowStatus.failed : WorkflowStatus.running).name,
-      'last_error',
+      _watchersHashKey(),
+      _dueKey(),
+      _topicKey(''),
+      WorkflowStatus.running.name,
+      WorkflowStatus.suspended.name,
+      WorkflowStatus.failed.name,
+      if (terminal) '1' else '0',
       jsonEncode({'error': error.toString(), 'stack': stack.toString()}),
-      'updated_at',
       now,
+      runId,
     ]);
-    if (terminal) {
-      await _send([
-        'HSET',
-        _runKey(runId),
-        'owner_id',
-        '',
-        'lease_expires_at',
-        '',
-      ]);
-    }
   }
 
   @override
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
-    final run = await get(runId);
-    final waitTopic = run?.waitTopic;
     final now = _clock.now().toIso8601String();
-    await _removeWatcher(runId);
     await _send([
-      'HSET',
+      'EVAL',
+      _luaMarkResumed,
+      '4',
       _runKey(runId),
-      'status',
+      _watchersHashKey(),
+      _dueKey(),
+      _topicKey(''),
+      runId,
       WorkflowStatus.running.name,
-      'resume_at',
-      '',
-      'wait_topic',
-      '',
-      'execution_id',
-      '',
-      'suspension_data',
+      WorkflowStatus.suspended.name,
+      WorkflowStatus.running.name,
       jsonEncode(data),
-      'owner_id',
-      '',
-      'lease_expires_at',
-      '',
-      'updated_at',
       now,
     ]);
-    await _send(['ZREM', _dueKey(), runId]);
-    if (waitTopic != null) {
-      await _send(['SREM', _topicKey(waitTopic), runId]);
-    }
   }
 
   @override
@@ -932,10 +1172,11 @@ return 0
     final result = await _send([
       'EVAL',
       _luaMarkFailedForExecution,
-      '3',
+      '4',
       _runKey(runId),
       _watchersHashKey(),
       _dueKey(),
+      _topicKey(''),
       executionId,
       WorkflowStatus.failed.name,
       WorkflowStatus.completed.name,
@@ -1014,6 +1255,7 @@ return 0
               limit.toString(),
               nowIso,
               WorkflowStatus.running.name,
+              WorkflowStatus.suspended.name,
             ])
             as List?;
     if (results == null || results.isEmpty) {
@@ -1082,96 +1324,144 @@ return 0
 
   @override
   Future<void> cancel(String runId, {String? reason}) async {
-    final state = await get(runId);
+    await cancelIfActive(runId, reason: reason);
+  }
+
+  @override
+  Future<bool> cancelIfActive(String runId, {String? reason}) async {
     final now = _clock.now();
     final cancellationData = <String, Object?>{
       'reason': reason ?? 'cancelled',
       'cancelledAt': now.toIso8601String(),
     };
-    await _removeWatcher(runId);
-    await _send([
-      'HSET',
+    final response = await _send([
+      'EVAL',
+      _luaCancelIfActive,
+      '4',
       _runKey(runId),
-      'status',
+      _watchersHashKey(),
+      _dueKey(),
+      _topicKey(''),
+      runId,
+      WorkflowStatus.running.name,
+      WorkflowStatus.suspended.name,
       WorkflowStatus.cancelled.name,
-      'resume_at',
-      '',
-      'wait_topic',
-      '',
-      'suspension_data',
-      '',
-      'cancellation_data',
       jsonEncode(cancellationData),
-      'owner_id',
-      '',
-      'lease_expires_at',
-      '',
-      'execution_id',
-      '',
-      'updated_at',
       now.toIso8601String(),
     ]);
-    await _send(['ZREM', _dueKey(), runId]);
-    final waitTopic = state?.waitTopic;
-    if (waitTopic != null) {
-      await _send(['SREM', _topicKey(waitTopic), runId]);
+    return response == 1 || response == '1';
+  }
+
+  @override
+  Future<WorkflowJournalSnapshot?> readJournal(
+    String runId,
+    WorkflowJournalKind kind,
+    String name,
+  ) async {
+    final run = await get(runId);
+    if (run == null) return null;
+    final raw = await _send(['HGET', _journalKey(runId, kind), name]);
+    return WorkflowJournalSnapshot(
+      run: run,
+      entry: raw == null ? null : _journalEntry(_decode(raw as String)),
+    );
+  }
+
+  @override
+  Future<List<WorkflowJournalEntry>> listCompensations(String runId) async {
+    final names =
+        await _send(['ZREVRANGE', _compensationOrderKey(runId), '0', '-1'])
+            as List? ??
+        const [];
+    final entries = <WorkflowJournalEntry>[];
+    for (final name in names.cast<String>()) {
+      final raw = await _send([
+        'HGET',
+        _journalKey(runId, WorkflowJournalKind.compensation),
+        name,
+      ]);
+      if (raw != null) entries.add(_journalEntry(_decode(raw as String)));
     }
+    return entries;
+  }
+
+  @override
+  Future<bool> commitJournal(
+    WorkflowJournalEntry entry, {
+    required int expectedRevision,
+    required String executionId,
+    WorkflowJournalCheckpoint? checkpoint,
+  }) async {
+    entry.validateWrite(
+      expectedRevision: expectedRevision,
+      checkpoint: checkpoint,
+    );
+    final compensation = checkpoint?.compensation;
+    final response = await _send([
+      'EVAL',
+      _luaCommitJournal,
+      '7',
+      _runKey(entry.runId),
+      _journalKey(entry.runId, entry.kind),
+      _journalKey(entry.runId, WorkflowJournalKind.compensation),
+      _compensationOrderKey(entry.runId),
+      _compensationSequenceKey(entry.runId),
+      _stepsKey(entry.runId),
+      _orderKey(entry.runId),
+      entry.kind.name,
+      entry.name,
+      expectedRevision.toString(),
+      entry.revision.toString(),
+      executionId,
+      jsonEncode({
+        'runId': entry.runId,
+        'kind': entry.kind.name,
+        'name': entry.name,
+        'revision': entry.revision,
+        'data': entry.data,
+        'position': entry.position,
+      }),
+      if (checkpoint == null) '' else jsonEncode(checkpoint.value),
+      if (checkpoint == null) '0' else '1',
+      if (compensation == null) '0' else '1',
+      WorkflowStatus.running.name,
+      WorkflowStatus.failed.name,
+      if (compensation == null)
+        ''
+      else
+        jsonEncode({
+          'runId': entry.runId,
+          'kind': WorkflowJournalKind.compensation.name,
+          'name': entry.name,
+          'revision': 1,
+          'data': compensation.toJournalData(),
+          'position': null,
+        }),
+      _clock.now().toUtc().toIso8601String(),
+    ]);
+    return response == 1 || response == '1';
   }
 
   @override
   Future<void> rewindToStep(String runId, String stepName) async {
-    await _removeWatcher(runId);
-    final names = await _send(['ZRANGE', _orderKey(runId), '0', '-1']) as List?;
-    if (names == null) return;
-    final baseIndexMap = <String, int>{};
-    var nextIndex = 0;
-    final entryIndexes = <int>[];
-    final castNames = names.cast<String>();
-    for (final name in castNames) {
-      final base = _baseStepName(name);
-      baseIndexMap.putIfAbsent(base, () => nextIndex++);
-      entryIndexes.add(baseIndexMap[base]!);
-    }
-    final targetIndex = baseIndexMap[stepName];
-    if (targetIndex == null) return;
-
-    final keep = <String>{};
-    for (var i = 0; i < castNames.length; i++) {
-      final baseIndex = entryIndexes[i];
-      if (baseIndex < targetIndex) {
-        keep.add(castNames[i]);
-      } else {
-        break;
-      }
-    }
-
-    for (final name in castNames) {
-      if (!keep.contains(name)) {
-        await _send(['HDEL', _stepsKey(runId), name]);
-        await _send(['ZREM', _orderKey(runId), name]);
-      }
-    }
-
-    const iterations = 0;
     await _send([
-      'HSET',
+      'EVAL',
+      _luaRewindJournal,
+      '8',
       _runKey(runId),
-      'status',
+      _stepsKey(runId),
+      _orderKey(runId),
+      _journalKey(runId, WorkflowJournalKind.step),
+      _journalKey(runId, WorkflowJournalKind.compensation),
+      _compensationOrderKey(runId),
+      _watchersHashKey(),
+      _dueKey(),
+      stepName,
+      runId,
       WorkflowStatus.suspended.name,
-      'wait_topic',
-      '',
-      'resume_at',
-      '',
-      'owner_id',
-      '',
-      'lease_expires_at',
-      '',
-      'execution_id',
-      '',
-      'suspension_data',
       jsonEncode({
         'step': stepName,
-        'iteration': iterations,
+        'iteration': 0,
         'iterationStep': stepName,
       }),
     ]);
@@ -1296,17 +1586,6 @@ return 0
     await _connection.close();
   }
 
-  Future<void> _removeWatcher(String runId) async {
-    await _send([
-      'EVAL',
-      _luaRemoveWatcher,
-      '2',
-      _watchersHashKey(),
-      _dueKey(),
-      runId,
-    ]);
-  }
-
   Map<String, Object?> _decodeMap(String? value) {
     if (value == null || value.isEmpty) return const {};
     final decoded = jsonDecode(value);
@@ -1316,6 +1595,32 @@ return 0
   Object? _decode(String? value) {
     if (value == null || value.isEmpty) return null;
     return jsonDecode(value);
+  }
+
+  WorkflowJournalEntry _journalEntry(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Invalid workflow journal record.');
+    }
+    final map = value.cast<String, Object?>();
+    final kind = WorkflowJournalKind.values.firstWhere(
+      (candidate) => candidate.name == map['kind'],
+      orElse: () => throw const FormatException('Invalid journal kind.'),
+    );
+    final data = map['data'];
+    if (map['runId'] is! String ||
+        map['name'] is! String ||
+        map['revision'] is! int ||
+        data is! Map) {
+      throw const FormatException('Invalid workflow journal record.');
+    }
+    return WorkflowJournalEntry(
+      runId: map['runId']! as String,
+      kind: kind,
+      name: map['name']! as String,
+      revision: map['revision']! as int,
+      data: data.cast<String, Object?>(),
+      position: map['position'] as int?,
+    );
   }
 
   DateTime? _decodeMillis(String? value) {

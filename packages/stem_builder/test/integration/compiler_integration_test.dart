@@ -51,6 +51,7 @@ void main() {
       expect(result.stdout, contains('list=[1, 2, 3]'));
       expect(result.stdout, contains('map={one: 1, two: 2}'));
       expect(result.stdout, contains('dto=Ada'));
+      expect(result.stdout, contains('custom=Grace'));
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
@@ -151,6 +152,7 @@ Future<ProcessResult> _run(
 
 const _fixtureSource = r'''
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/stem.dart';
 
@@ -163,6 +165,103 @@ class Person {
   factory Person.fromJson(Map<String, Object?> json) =>
       Person(json['name']! as String);
 }
+
+class PersonCodec extends Codec<Person, Object?> {
+  const PersonCodec();
+
+  @override
+  Converter<Person, Object?> get encoder => const _PersonEncoder();
+  @override
+  Converter<Object?, Person> get decoder => const _PersonDecoder();
+  @override
+  Object? encode(Person input) => input.toJson();
+  @override
+  Person decode(Object? encoded) =>
+      Person.fromJson(encoded! as Map<String, Object?>);
+}
+
+class _PersonEncoder extends Converter<Person, Object?> {
+  const _PersonEncoder();
+  @override
+  Object? convert(Person input) => input.toJson();
+}
+
+class _PersonDecoder extends Converter<Object?, Person> {
+  const _PersonDecoder();
+  @override
+  Person convert(Object? input) =>
+      Person.fromJson(input! as Map<String, Object?>);
+}
+
+class PeopleCodec extends Codec<List<Person>, Object?> {
+  const PeopleCodec();
+  @override
+  Converter<List<Person>, Object?> get encoder => const _PeopleEncoder();
+  @override
+  Converter<Object?, List<Person>> get decoder => const _PeopleDecoder();
+  @override
+  Object? encode(List<Person> input) =>
+      input.map((person) => person.toJson()).toList();
+  @override
+  List<Person> decode(Object? encoded) => (encoded! as List<Object?>)
+      .map((item) => Person.fromJson(item! as Map<String, Object?>))
+      .toList();
+}
+
+class _PeopleEncoder extends Converter<List<Person>, Object?> {
+  const _PeopleEncoder();
+  @override
+  Object? convert(List<Person> input) =>
+      input.map((person) => person.toJson()).toList();
+}
+
+class _PeopleDecoder extends Converter<Object?, List<Person>> {
+  const _PeopleDecoder();
+  @override
+  List<Person> convert(Object? input) => (input! as List<Object?>)
+      .map((item) => Person.fromJson(item! as Map<String, Object?>))
+      .toList();
+}
+
+int personCodecGetterEvaluations = 0;
+
+@PayloadCodecDefn()
+Codec<Person, Object?> get personCodec {
+  personCodecGetterEvaluations++;
+  return const PersonCodec();
+}
+
+@PayloadCodecDefn()
+Codec<List<Person>, Object?> get peopleCodec => const PeopleCodec();
+
+class Box<T> {
+  const Box(this.value);
+  final T value;
+}
+
+class IntBoxCodec extends Codec<Box<int>, Object?> {
+  const IntBoxCodec();
+  @override
+  Converter<Box<int>, Object?> get encoder => const _IntBoxEncoder();
+  @override
+  Converter<Object?, Box<int>> get decoder => const _IntBoxDecoder();
+}
+
+class _IntBoxEncoder extends Converter<Box<int>, Object?> {
+  const _IntBoxEncoder();
+  @override
+  Object? convert(Box<int> input) => {'value': input.value};
+}
+
+class _IntBoxDecoder extends Converter<Object?, Box<int>> {
+  const _IntBoxDecoder();
+  @override
+  Box<int> convert(Object? input) =>
+      Box((input! as Map<String, Object?>)['value']! as int);
+}
+
+@PayloadCodecDefn()
+const IntBoxCodec boxInt = IntBoxCodec();
 
 @WorkflowDefn(
   name: r'compiler.$flow',
@@ -199,6 +298,15 @@ class DtoFlow {
 
   @WorkflowStep()
   Future<Person?> checkpoint(Person? person) async => person;
+}
+
+@WorkflowDefn(name: 'compiler.custom-dto', kind: WorkflowKind.script)
+class CustomDtoFlow {
+  @WorkflowRun()
+  Future<Person> run(Person person) async => checkpoint(person);
+
+  @WorkflowStep()
+  Future<Person> checkpoint(Person person) async => person;
 }
 
 int replayCheckpointExecutions = 0;
@@ -249,6 +357,12 @@ FutureOr<Map<String, int>> mapTask() => {'one': 1, 'two': 2};
 Future<List<Map<String, int>>> nestedTask() async => [
   {'one': 1},
 ];
+
+@TaskDefn(name: 'compiler.people')
+Future<List<Person>> peopleTask() async => [Person('Grace')];
+
+@TaskDefn(name: 'compiler.box', runInIsolate: false)
+Future<Box<int>> boxTask(Box<int> value) async => Box(value.value + 1);
 ''';
 
 const _mainSource = r'''
@@ -289,10 +403,25 @@ Future<void> main() async {
       app,
       timeout: const Duration(seconds: 5),
     );
+    final people = await StemTaskDefinitions.compilerPeople.enqueueAndWait(
+      app,
+      timeout: const Duration(seconds: 5),
+    );
+    final box = await StemTaskDefinitions.compilerBox.enqueueAndWait(
+      app,
+      const Box(41),
+      timeout: const Duration(seconds: 5),
+    );
     final dto = Person('Ada');
     final dtoResult = await StemWorkflowDefinitions.dto.startAndWait(
       workflowApp,
       params: dto,
+      timeout: const Duration(seconds: 5),
+    );
+    final customDtoResult =
+        await StemWorkflowDefinitions.customDto.startAndWait(
+      workflowApp,
+      params: Person('Grace'),
       timeout: const Duration(seconds: 5),
     );
     final nullDto = await StemWorkflowDefinitions.dto.startAndWait(
@@ -313,16 +442,20 @@ Future<void> main() async {
       params: (count: 3, label: 'safe'),
       timeout: const Duration(seconds: 5),
     );
-    if ([sync, voidResult, syncVoidResult, futureOrVoidResult, list, map, nested].any((r) => r?.isSucceeded != true) ||
+    if ([sync, voidResult, syncVoidResult, futureOrVoidResult, list, map, nested, people].any((r) => r?.isSucceeded != true) ||
         sync?.value != 7 ||
         voidResult?.value != null ||
         list?.value.toString() != '[1, 2, 3]' ||
         map?.value?['one'] != 1 ||
         map?.value?['two'] != 2 ||
         nested?.value?.single['one'] != 1 ||
+        people?.value?.single.name != 'Grace' ||
+        box?.value?.value != 42 ||
         dtoResult?.value?.name != 'Ada' ||
+        customDtoResult?.value?.name != 'Grace' ||
         nullDto?.status != WorkflowStatus.completed ||
         nullDto?.value != null ||
+        personCodecGetterEvaluations != 1 ||
         flow?.value?['two'] != 2 ||
         replay?.value != 'cached' ||
         replayCheckpointExecutions != 1 ||
@@ -340,7 +473,8 @@ Future<void> main() async {
       );
     }
     print('fixture-ok sync=${sync?.value} void=void list=${list?.value} '
-        'map=${map?.value} nested=${nested?.value} dto=${dtoResult?.value?.name}');
+        'map=${map?.value} nested=${nested?.value} dto=${dtoResult?.value?.name} '
+        'custom=${customDtoResult?.value?.name}');
   } finally {
     await workflowApp.close();
     await app.shutdown();
