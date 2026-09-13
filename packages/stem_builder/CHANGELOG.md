@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.2
+## 0.4.0
 
 - Add `@PayloadCodecDefn()` bindings for library-local standard
   `Codec<T, Object?>` values and getters. Matching is exact, including

@@ -10,6 +10,9 @@
   atomic checkpoint/compensation writes, and ordered cleanup recovery.
 - Add atomic first-terminal-wins completion/cancellation and prevent ordinary
   workflow mutations from resurrecting terminal runs.
+- Classify fenced workflow failure outcomes inside the same row-locked
+  transaction as the mutation. Verify competing terminal failures across
+  independently opened stores have one applied outcome.
 - Add the additive workflow execution-fencing migration (`execution_id`) and
   fenced lease/failure operations. Apply the migration before using mixed
   workers or relying on stale-execution protection; `terminal: false` records
