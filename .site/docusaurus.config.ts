@@ -11,7 +11,7 @@ const llmsFullTxtUrl = `${siteUrl}${siteBaseUrl}llms-full.txt`;
 
 const config: Config = {
   title: 'Stem Documentation',
-  tagline: 'Spec-driven background jobs for Dart',
+  tagline: 'Background jobs and durable workflows for Dart',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -47,7 +47,7 @@ const config: Config = {
         docs: {
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/kingwill101/stem/tree/main/.site/docs/',
+          editUrl: 'https://github.com/kingwill101/stem/tree/master/.site/docs/',
           remarkPlugins: [[remarkCodeRegion, { rootDir: __dirname }]],
         },
         blog: {
@@ -56,7 +56,7 @@ const config: Config = {
             type: ['rss', 'atom'],
             xslt: true,
           },
-          editUrl: 'https://github.com/kingwill101/stem/tree/main/.site/blog/',
+          editUrl: 'https://github.com/kingwill101/stem/tree/master/.site/blog/',
           // Useful options to enforce blogging best practices
           onInlineTags: 'warn',
           onInlineAuthors: 'warn',

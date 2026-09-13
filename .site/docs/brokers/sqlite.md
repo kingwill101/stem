@@ -17,17 +17,24 @@ Use SQLite when you:
 - Want a **zero-infrastructure** dev/test broker + backend.
 - Prefer a local file-backed queue for demos or smoke tests.
 
-Avoid SQLite when you need multi-host scaling, cross-process broadcast control,
-or high-throughput workloads. Redis or Postgres are better fits in production.
+Avoid SQLite when you need multi-host scaling or cross-process broadcast
+control. Delivery is polling-based and SQLite permits one writer at a time, so
+Redis or Postgres are usually better fits for high-throughput production
+workloads.
 
 ## Install
 
-Add the adapter package:
+Add the adapter package using the version resolved for your release. The
+repository checkout currently declares `0.3.0`, but that does not establish
+what is published on pub:
 
 ```yaml
 dependencies:
-  stem_sqlite: ^0.2.0
+  stem_sqlite: any
 ```
+
+Prefer `dart pub add stem_sqlite` for a published application, or use a
+`path:` dependency while evaluating this checkout.
 
 ## Quick start (broker)
 
@@ -68,8 +75,9 @@ SQLite adapters expose the same tuning hooks as other brokers/backends:
 These options are passed to `SqliteBroker.open(...)` and
 `SqliteResultBackend.open(...)`.
 
-Migrations run automatically on first open; keep the database file on local
-disk and allow the process to create the file if it does not exist.
+Opening `SqliteBroker` or `SqliteResultBackend` runs the adapter migrations.
+Keep the database file on local disk and allow the process to create it if it
+does not exist.
 
 ## Recommended layout (separate DB files)
 
@@ -78,13 +86,14 @@ contention:
 
 - **Use separate DB files** for the broker and backend.
 - **Keep producers off the backend** (let workers be the only writers).
-- **Do not share a single SQLite file** between broker and backend.
+- Sharing a file is supported, but separate files are the recommended layout:
+  it reduces writer contention between queue settlement and result writes.
 
-Stem serializes its own transactional broker/backend mutations when multiple
-handles point at the same file, which prevents savepoint corruption and
+Stem serializes its own transactional mutations when multiple handles in the
+same isolate point at the same file, preventing savepoint corruption and
 in-process writer races. This coordination does not cover unrelated processes
 or tools opening the file, and it cannot turn SQLite into a multi-host queue.
-Use separate files when throughput matters.
+Use separate files when throughput or process isolation matters.
 
 A simple layout:
 
@@ -125,10 +134,11 @@ SQLite brokers are intentionally minimal:
 - Stem coordinates in-process writes across its broker, backend, workflow, and
   control handles, but external writers and separate processes still need
   SQLite-compatible locking discipline.
+- SQLite is local persistence, not a mobile OS background scheduler. A platform
+  callback must reopen the app and explicitly start or recover work.
 
-If you need cross-process broadcast control, multi-queue consumption, or
-multi-host scaling,
-use Redis or Postgres instead.
+If you need cross-process broadcast control or multi-host scaling, use Redis or
+Postgres instead.
 
 ## Examples
 

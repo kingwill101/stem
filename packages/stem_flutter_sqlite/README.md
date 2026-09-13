@@ -7,9 +7,14 @@ worker, and result observer sharing managed SQLite stores. There is no required
 custom worker isolate, port protocol, second task registry, or manual database
 handle lifecycle.
 
-Version 0.3.1 requires Stem `>=0.4.2 <0.5.0`,
-`stem_flutter >=0.3.1 <0.4.0`, and `stem_sqlite >=0.2.3 <0.3.0` for bounded
-execution and safe consumer teardown. It replaces the legacy runtime helpers.
+The current source version, **0.4.0**, requires Dart `>=3.13.0 <4.0.0`,
+Stem `>=0.5.0 <1.0.0`, `stem_flutter >=0.4.0 <1.0.0`, and
+`stem_sqlite >=0.3.0 <1.0.0`. Use a Flutter SDK that includes a compatible Dart
+SDK. It replaces the legacy runtime helpers.
+
+Repository documentation can lead the published release. If you use version
+0.3.1 from pub.dev, follow that release's documentation and dependency bounds
+instead of mixing it with the current source examples.
 
 ## Getting started
 

@@ -34,6 +34,42 @@ If a workflow enqueues normal Stem tasks, those tasks still use the normal
 `TaskOptions` retry policy. The workflow and the task are separate retry
 surfaces.
 
+## Hosted journal retries
+
+The function-first host also supports a durable logical budget for a named
+action. It is separate from task delivery retries:
+
+```dart
+await context.step(
+  'charge',
+  () => paymentClient.charge(orderId),
+  retry: const WorkflowRetryPolicy(maxAttempts: 3),
+);
+```
+
+`maxAttempts` includes the first attempt and abandoned claims after a crash.
+The journal persists attempts and retry times, so transport redelivery does
+not reset the budget. An exhausted action throws
+`WorkflowStepRetryExhausted`; it does not start another task-level retry.
+
+## Result-aware compensation
+
+Hosted workflows can register a typed compensation and attach it to a
+checkpoint. Compensation is not a transaction or rollback of an external
+system, and broader saga policy tooling remains deferred:
+
+```dart
+final undo = HostedCompensation<String>(
+  name: 'undo-reservation',
+  run: (context, reservationId) =>
+      reservations.release(reservationId, idempotencyKey: context.idempotencyKey),
+  retryPolicy: const WorkflowRetryPolicy(maxAttempts: 3),
+);
+```
+
+Register it in `HostedWorkflow.compensations` and pass `compensation: undo` to
+the relevant `context.step`. Make both the action and cleanup idempotent.
+
 ## Acknowledgement uncertainty
 
 Task delivery is at least once. Stem records a successful result before the

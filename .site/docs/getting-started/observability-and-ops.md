@@ -5,166 +5,77 @@ sidebar_position: 4
 slug: /getting-started/observability-and-ops
 ---
 
-With Redis/Postgres in place, it’s time to watch the system run. This guide
-covers telemetry, worker heartbeats, DLQ tooling, and the remote-control
-channel—all the pieces you need to operate Stem confidently.
+Stem emits telemetry from each configured producer or worker process. Configure
+exporters in that process's bootstrap. An OTLP endpoint does not make task
+state durable, and setting it does not start a collector for you. The
+[experimental dashboard](../core-concepts/dashboard.md) is a separate application.
 
-## 1. Enable OpenTelemetry Export
+## Configure
 
-Stem emits metrics, traces, and structured logs out of the box. Point it at an
-OTLP endpoint (the repo ships a ready-made stack under
-`packages/stem/example/otel_metrics/`):
+`ObservabilityConfig.fromEnvironment()` reads supported variables including
+`STEM_METRIC_EXPORTERS`, `STEM_OTLP_ENDPOINT`, `STEM_HEARTBEAT_INTERVAL`,
+`STEM_WORKER_NAMESPACE`, and signal enable/disable variables:
+
+```dart
+import 'package:stem/stem.dart';
+
+final observability = ObservabilityConfig.fromEnvironment();
+observability.applyMetricExporters();
+```
+
+Use the [observability example](https://github.com/kingwill101/stem/tree/master/packages/stem/example/docs_snippets/lib/observability.dart)
+for exporter and signal wiring. Metrics can reset when a process restarts.
+
+## Symptom → check → remedy
+
+- **Backlog grows** → check heartbeats, concurrency, routing, and broker
+  connectivity → restore workers or add capacity.
+- **Retries rise** → inspect the exception and downstream status → repair the
+  dependency or classify permanent errors as non-retryable.
+- **DLQ grows** → inspect representative payloads and reasons → deploy a
+  compatible handler/schema, then replay deliberately.
+- **Heartbeats disappear** → check process health, broker access, namespace,
+  and TTL → replace the worker after checking for in-flight work.
+- **Workflow is suspended** → inspect run state and waiter topic → emit the
+  matching event or cancel according to policy.
+
+## CLI operations
+
+Install the separate CLI as a development dependency:
 
 ```bash
-# Start the example collector, Prometheus, and Grafana stack.
-docker compose -f packages/stem/example/otel_metrics/docker-compose.yml up
-
-# Export OTLP details for producers and workers.
-export STEM_OTLP_ENDPOINT=http://localhost:4318
-export STEM_OTLP_HEADERS="authorization=Basic c3RlbTpwYXNz"
-export STEM_OTLP_METRICS_INTERVAL=10s
-export STEM_LOG_FORMAT=json
+dart pub add --dev stem_cli
+dart run stem_cli:stem --help
 ```
 
-In Dart, no extra code is required—the env vars activate exporters. Metrics
-include queue depth, retry counts, lease renewals, and worker concurrency;
-traces connect `Stem.enqueue` spans with worker execution spans so you can
-follow a task end-to-end.
-
-If you want an explicit in-process configuration, wire metrics and tracing
-directly:
-
-```dart title="Configure metrics" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-metrics
-
-```
-
-```dart title="Tracing-enabled Stem" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-tracing
-
-```
-
-## 2. Inspect Worker Heartbeats & Status
-
-Workers publish detailed heartbeats (in-flight counts, leases, queues) to the
-result backend. Use the CLI to view them live:
+In the commands below, `stem` means that executable; replace it with
+`dart run stem_cli:stem` when using the project-local installation. The CLI
+resolves the broker and store URLs configured through environment variables or
+command flags. Point it at the same namespace and stores as your application.
+Task metadata inspection additionally needs your registry configuration; the
+CLI cannot discover arbitrary Dart task bodies from a queue.
 
 ```bash
-# Snapshot the latest heartbeat for every worker.
-stem worker status \
-  --backend "$STEM_RESULT_BACKEND_URL"
-
-# Stream live updates (press Ctrl+C to stop).
-stem worker status \
-  --broker "$STEM_BROKER_URL" \
-  --follow
-```
-
-From Dart you can pull the same data:
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-heartbeats
-
-```
-
-## 3. Operate Workers via the Control Channel
-
-Stem exposes a built-in control bus so you can interact with workers without
-SSH or custom wiring.
-
-```bash
-# Discover workers and latency.
+stem health --broker "$STEM_BROKER_URL" --backend "$STEM_RESULT_BACKEND_URL" --json
 stem worker ping
-
-# Collect stats (queues, concurrency, runtimes) as JSON.
-stem worker stats --json
-
-# Revoke a problematic task globally (optionally terminate in-flight).
-stem worker revoke \
-  --task 1f23c6a1-... \
-  --terminate \
-
-# Issue a warm shutdown to drain work gracefully.
-stem worker shutdown \
-  --worker default@host-a
-```
-
-Need to manage multiple instances on one host? Ship the bundled daemonization
-templates or lean on the multi-wrapper:
-
-```bash
-# Launch and supervise multiple workers with templated PID/log files.
-stem worker multi start alpha beta \
-  --pidfile /var/run/stem/%n.pid \
-  --logfile /var/log/stem/%n.log \
-  --command "/usr/bin/dart run bin/worker.dart"
-
-# Drain and stop the same fleet.
-stem worker multi stop alpha beta
-```
-
-## 4. Manage Queues, Retries, and DLQ
-
-The CLI exposes queues, retries, and dead letters so operators can recover
-quickly.
-
-```bash
-# Inspect queue depth and inflight counts.
+stem worker inspect
+stem worker stats
+stem worker status
+stem observe metrics
 stem observe queues
-
-# Inspect worker snapshots from the result backend.
 stem observe workers
-
-# Inspect the dead-letter queue with pagination.
-stem dlq list --queue default --limit 20
-
-# Replay failed tasks back onto their original queues.
-stem dlq replay --queue default --limit 10 --confirm
+stem dlq list --queue default
+stem routing dump
+stem schedule list
+stem wf list
 ```
 
-Behind the scenes the CLI talks to the same Redis data structures used by
-workers, so you see the exact state the runtime is using.
+`health` checks broker/backend connectivity, not whether an application task
+can complete. Combine it with a representative enqueue-to-result smoke test.
 
-## 5. Alert on Scheduler Drift & Schedules
+Use `stem <command> --help` for required options. Protect replay, purge,
+revoke, shutdown, pause, schedule mutation, and workflow cancellation with
+operator authentication and an audit trail.
 
-Beat records run history, drift, and errors. Keep an eye on it with:
-
-```bash
-stem observe schedules \
-  --file config/schedules.yaml
-
-stem schedule dry-run --spec "every:5m" --count 5
-```
-
-These commands surface the same drift metrics your Grafana dashboards chart and
-help confirm schedule definitions before they go live.
-
-## 6. React to Signals for Custom Integrations
-
-Signals fire for task, worker, and scheduler lifecycle events. Wire them into
-chat, incident tooling, or analytics:
-
-```dart title="lib/analytics.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-analytics
-
-```
-
-```dart title="Signal handlers" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-signals
-
-```
-
-```dart title="Structured logging" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-logging
-
-```
-
-Combine signal handlers with telemetry to build rich observability without
-scattering logic across the codebase.
-
-## 7. Next Stop
-
-You now have dashboards, CLI tooling, and remote control over workers. Finish
-the onboarding journey by applying security hardening, TLS, and production
-checklists in [Prepare for Production](./production-checklist.md).
-
-If you want more hands-on drills:
-
-- Run `packages/stem/example/ops_health_suite` to practice `stem health` and
-  `stem observe` flows.
-- Run `packages/stem/example/scheduler_observability` to watch drift metrics
-  and schedule signals.
+See [CLI control](../core-concepts/cli-control.md) and
+[workflow troubleshooting](../workflows/troubleshooting.md).

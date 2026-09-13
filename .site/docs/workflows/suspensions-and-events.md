@@ -4,7 +4,7 @@ title: Suspensions and Events
 
 Suspension is where workflows differ from normal queue consumers. A workflow
 can stop executing, persist its state, and resume later on the same worker or a
-different worker.
+different worker. Suspension is durable state, not a blocked Dart `Future`.
 
 ## Sleep
 
@@ -31,13 +31,20 @@ If only the nested watcher payload is a DTO, use `watcher.payloadJson(...)` or
 Typical flow:
 
 1. a step calls `awaitEvent('orders.payment.confirmed')`
-2. the run is marked suspended in the store
+2. the runtime persists the suspension and watcher before the run is treated
+   as waiting
 3. another process calls `WorkflowRuntime.emit(...)` /
    `WorkflowRuntime.emitValue(...)` (or an app/service wrapper around it) with
    a payload
-4. the runtime resumes the run and exposes the payload through
-   `waitForEvent(...)`, `event.wait(ctx)`, or the lower-level
+4. the store resolves matching watchers and the runtime enqueues continuations;
+   the event is not buffered for a future watcher
+5. the resumed run replays from its durable checkpoint and exposes the payload
+   through `waitForEvent(...)`, `event.wait(ctx)`, or the lower-level
    `takeResumeData()` / `takeResumeValue<T>(codec: ...)`
+
+An emit therefore only wakes watchers that exist when it resolves the topic.
+Emit after the watcher has been registered, and do not use a topic as a
+run-addressed mailbox. A single emit may resolve all matching waiting runs.
 
 For the common "wait for one event and continue" case, prefer:
 
@@ -90,6 +97,22 @@ The workflow store can tell you which runs are waiting on a topic:
 
 That is the foundation for dashboards, operational tooling, and bulk
 inspection.
+
+## Replay, retries, and null values
+
+After a crash or lease loss, completed checkpoints are replayed from the store;
+they are not executed as new business work. The continuation can still be
+delivered more than once, so external effects need idempotency. A stale worker
+cannot commit over a newer owner: execution leases and fencing checks protect
+the persisted transition.
+
+The expression-style `waitForEventValue<T>` and `takeResumeValue<T>` helpers use
+`null` as the “no resume payload yet” sentinel. That makes them unsuitable for
+distinguishing a delivered `null` event from the first invocation. For nullable
+values, use an explicit non-null envelope/map (as `HostedWorkflowContext` does)
+or a lower-level path whose control metadata distinguishes resume from payload.
+Codecs preserve scalar values and `null` when the destination permits them, but
+event watcher transport itself remains map-shaped.
 
 ## Group operations
 

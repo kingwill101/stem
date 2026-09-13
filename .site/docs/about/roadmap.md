@@ -62,7 +62,9 @@ Work in this phase is focused on evidence and boundaries:
 The following are not release priorities while the reliability work is in
 progress:
 
-- Compensation/saga primitives for workflows.
+- Broader saga/compensation policy primitives for workflows (the hosted API
+  already supports result-aware compensation registrations; policy tooling is
+  still deferred).
 - Additional broker integrations.
 - A broader dashboard product; the current dashboard remains experimental.
 - Exactly-once execution claims for external side effects.

@@ -12,9 +12,9 @@ choose the right transport for your deployment.
 ## What is a broker?
 
 A **broker** is the message transport between producers and workers. When you
-call `Stem.enqueue`, the broker persists the task envelope and makes it
-available to one or more workers. The broker is not where results live; it only
-handles delivery.
+call `Stem.enqueue`, the broker stores (or, for an in-memory broker, retains)
+the task envelope and makes it available to workers. The broker is not where
+task results live; it handles delivery and settlement.
 
 In Stem:
 
@@ -26,7 +26,8 @@ In Stem:
 
 Use the broker for **delivery**, and a result backend for **history**:
 
-- **Broker**: queues, leases, priority, delayed delivery, broadcast channels.
+- **Broker**: queues, leases, priority, delayed delivery, broadcast channels,
+  and dead letters when the adapter advertises those capabilities.
 - **Result backend**: task status, result payloads, heartbeats, group/chord
   metadata.
 
@@ -35,13 +36,15 @@ durability and performance needs.
 
 ## What a Stem broker must provide
 
-Every broker adapter implements the same `Broker` contract and should support:
+The compatibility `Broker` facade includes common queue operations. Optional
+capabilities are advertised by `BrokerCapabilities`; do not assume every
+adapter provides every control-plane operation:
 
 - **At-least-once delivery** with acknowledgements.
-- **Visibility/leases** so workers can extend or retry tasks safely.
-- **Priority buckets** so higher-priority tasks are dispatched first.
-- **Delayed tasks** via `notBefore` and retry scheduling.
-- **Broadcast channels** (used for worker control commands).
+- **Visibility/leases** where the adapter implements `LeaseBroker`.
+- **Priority ordering** where `supportsPriorityOrdering` is true.
+- **Delayed tasks** where `supportsDelayedDelivery` is true.
+- **Broadcast channels** where `supportsBroadcastFanout` is true.
 
 If the broker does not support a feature, it should document the limitation.
 Planned adapters may not support full control-plane tooling until release.
@@ -52,10 +55,10 @@ Planned adapters may not support full control-plane tooling until release.
 | ----------------- | ------------ | -------- | ------ | -------- | ----------------- | ----- |
 | Redis Streams     | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Lowest latency, great default. |
 | Postgres          | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Durable, SQL-friendly; higher latency than Redis. |
-| SQLite            | ✅ Supported | At-least-once | ✅ | ✅ | ⚠️ | Single-host file broker; broadcast fan-out is in-process only. |
-| In-memory         | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Single-process only; testing/dev. |
-| RabbitMQ          | 🔜 Planned   | AMQP acks | ✅ | ✅ | ✅ | Mature routing; requires AMQP infra. |
-| Amazon SQS        | 🔜 Planned   | Visibility timeout | ✅ | Limited | ⚠️ | Fully managed; no native fanout. |
+| SQLite            | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Single-host file broker; broadcast fan-out is in-process only. |
+| In-memory         | ✅ Supported | At-least-once while the process is alive | ✅ | ❌ | ✅ | Single-process only; broadcast is in-process and data is not durable. |
+| RabbitMQ          | 🔜 Planned   | — | — | — | — | No adapter is shipped in this checkout. |
+| Amazon SQS        | 🔜 Planned   | — | — | — | — | No adapter is shipped in this checkout. |
 
 ## Broker summaries
 
@@ -75,7 +78,7 @@ aligned with worker concurrency.
 
 Best for single-host development and demos. The SQLite broker uses polling-
 based delivery and supports broadcast fan-out only for subscribers in the same
-process. Use separate SQLite files for broker vs. backend to avoid WAL
+process. Use separate SQLite files for broker vs. backend to reduce WAL/write
 contention. See the [SQLite adapter guide](./sqlite.md) for setup and
 operational notes.
 
@@ -84,15 +87,10 @@ operational notes.
 Perfect for tests and local demos. Not durable and only works inside a single
 process.
 
-### RabbitMQ (planned)
+### RabbitMQ and Amazon SQS (planned)
 
-Ideal for teams already invested in AMQP routing and tooling. Stem will map its
-queue/broadcast model onto topic and fanout exchanges.
-
-### Amazon SQS (planned)
-
-Great for managed AWS deployments and automatic scaling. Expect higher latency
-and limited fanout without SNS.
+These integrations are not shipped in this checkout. Do not use the matrix as a
+claim about their eventual delivery, lease, or control semantics.
 
 ### Adapter Guidance
 
@@ -106,10 +104,10 @@ and limited fanout without SNS.
   concurrency.
 - **SQLite** is ideal for single-host development and demos. Use separate DB
   files for broker and backend; avoid producer writes to the backend.
-- **In-memory** adapters mirror the Redis API and are safe for smoke tests.
-- **RabbitMQ & SQS** bindings follow the same `Broker` contract. Keep tasks
-  idempotent—visibility/lease guarantees differ slightly (documented in the
-  adapter guides once released).
+- **In-memory** adapters are safe for smoke tests, but do not enforce priority
+  ordering and lose data when the process exits.
+- **RabbitMQ & SQS** have no released bindings here. Keep tasks idempotent when
+  evaluating a future adapter, and verify its advertised capabilities.
 
 ### Selecting a Broker
 
@@ -117,8 +115,8 @@ and limited fanout without SNS.
 2. Consider Postgres when you need transactional enqueue/dequeue or prefer a
    single database dependency with built-in durability.
 3. Use in-memory during development to simplify onboarding.
-4. If you already operate RabbitMQ/SQS at scale, wire the respective adapter
-   and monitor the lease/ack semantics described in the spec.
+4. If you already operate RabbitMQ/SQS at scale, wait for a released adapter
+   and verify its capability snapshot and lease/ack semantics.
 
 ## Broker configuration quick start
 

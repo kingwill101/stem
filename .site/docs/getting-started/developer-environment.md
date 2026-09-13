@@ -5,144 +5,124 @@ sidebar_position: 3
 slug: /getting-started/developer-environment
 ---
 
-Graduate from the in-memory demo to a multi-process setup backed by Redis or
-Postgres. You will run workers, Beat, and the CLI in separate terminals while
-exploring routing, broadcast delivery, and canvas composition with persistent
-storage.
+Move from a process-local demo to **three separate processes**: a producer, a
+worker, and a result observer. Start with one broker/backend combination before
+adding routing, recurring schedules, or autoscaling.
 
-## 1. Run Redis and Postgres Locally
+This tutorial uses Redis for both delivery and results. It demonstrates the
+current source API; check your resolved package's documentation if you are using
+an older release.
 
-Docker is the fastest way to spin up dependencies:
+## 1. Start a development Redis instance
 
-```bash
-# Redis Streams for broker, locks, rate limiting, and schedules.
-docker run --rm -p 6379:6379 redis:7-alpine
-
-# Postgres for durable task results or schedule storage (optional now, useful later).
-docker run --rm -p 5432:5432 \
-  -e POSTGRES_PASSWORD=postgres \
-  postgres:14
-```
-
-Export the connection details so producers, workers, and Beat share them:
+In a separate terminal:
 
 ```bash
-export STEM_BROKER_URL=redis://localhost:6379
-export STEM_RESULT_BACKEND_URL=redis://localhost:6379/1
-export STEM_SCHEDULE_STORE_URL=redis://localhost:6379/2
-export STEM_CONTROL_NAMESPACE=stem
+docker run --rm --name stem-redis-demo \
+  -p 127.0.0.1:6379:6379 redis:7-alpine \
+  redis-server --appendonly yes
 ```
 
-## 2. Bootstrap Stem Config
+This binds Redis to localhost and enables AOF inside the container. It is
+**disposable development storage**: `--rm` removes the container on exit, and
+there is no mounted data volume. For retained deployments, configure durable
+storage, backups, access controls, and TLS separately. Do not expose an
+unauthenticated development Redis port publicly.
 
-Use `StemConfig.fromEnvironment()` to hydrate adapters from the environment and
-share them across your app. Split the bootstrap into smaller steps so each
-piece is easy to scan and reuse:
-
-### Load configuration
-
-```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-config
-
-```
-
-### Connect adapters
-
-```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-adapters
-
-```
-
-### Create the shared client/producer
-
-```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-stem
-
-```
-
-### Create the worker
-
-```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-worker
-
-```
-
-Together, these steps give you access to routing, rate limiting, revoke
-storage, and queue configuration—all backed by Redis.
-
-The recommended pattern here is to resolve a `StemStack` from the environment
-once, build a shared `StemClient` from that stack, and then layer workers or
-workflow apps on top. Manual broker/backend factory wiring is the fallback
-path, not the default.
-
-## 3. Launch Workers, Beat, and Producers
-
-With the environment configured, run Stem components from separate terminals:
+Use the same connection settings in every terminal that runs the example:
 
 ```bash
-# Terminal 1 — run a worker process (set STEM_WORKER_COMMAND or pass --command).
-export STEM_WORKER_COMMAND="dart run bin/worker.dart"
-stem worker multi start alpha --queue default --queue reports --queue emails
-
-# Terminal 2 — apply schedules and run Beat (Dart entrypoint).
-stem schedule apply --file config/schedules.json --yes
-stem schedule list
-dart run packages/stem/example/scheduler_observability/bin/beat.dart
+export STEM_BROKER_URL=redis://127.0.0.1:6379/0
+export STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6379/1
+export STEM_NAMESPACE=infrastructure-demo
 ```
 
-Use a producer entrypoint to enqueue work:
+The different Redis database numbers separate queue keys from result keys in
+this single-instance example. They are not independent failure domains.
+Redis Cluster deployments need a different database/namespace strategy.
 
-```dart title="lib/producer.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-redis
+## 2. Create the application
 
+```bash
+dart create -t console infrastructure_demo
+cd infrastructure_demo
+dart pub add stem stem_redis
 ```
 
-Routing configuration supports default queue aliases, glob-based routing
-rules, and broadcast channels. A minimal `config/routing.yaml` might look like:
+If you are testing unreleased source, use compatible local path dependencies
+instead of mixing current examples with older published packages.
 
-```yaml title="config/routing.yaml"
-default_queue: critical
-queues:
-  reports:
-    routing_key: reports.generate
-    priority_range: [2, 7]
-  emails:
-    routing_key: billing.email-*
-broadcasts:
-  maintenance:
-    delivery: fanout
-```
+Save the following as `bin/infrastructure_demo.dart`. All three commands use
+the same typed task definition, queue defaults, broker, and backend. Creating
+a client does not start a worker.
 
-Stem clamps priorities to queue-defined ranges and publishes broadcast tasks to
-all subscribed workers exactly once per acknowledgement window.
-
-## 4. Coordinate Work with Canvas and Result Backend
-
-Now that Redis backs the result store, you can orchestrate more complex
-pipelines and query progress from any process:
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-canvas
+```dart title="bin/infrastructure_demo.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/infrastructure.dart#infrastructure-main
 
 ```
 
-Later, you can monitor status from any machine with a lightweight client:
+The same example is checked into
+`packages/stem/example/docs_snippets/lib/infrastructure.dart`. From a repository
+checkout, run it in the `docs_snippets` package after `dart pub get`.
 
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-status
+## 3. Enqueue, process, and read the result
 
+Run these commands in order. They intentionally use separate Dart processes:
+
+```bash
+# Producer: enqueues one task, prints its ID, and exits.
+dart run bin/infrastructure_demo.dart enqueue
+
+# Worker: processes queued tasks, then stops after an idle window.
+dart run bin/infrastructure_demo.dart work
+
+# Observer: replace TASK_ID with the ID printed by the producer.
+dart run bin/infrastructure_demo.dart result TASK_ID
 ```
 
-## 5. Listen to Signals for Cross-Cutting Integrations
+Expected result: `42`. The worker is a **one-shot drain**, not a daemon. Its
+idle window is a local observation, not proof that every queue is globally
+empty. Delayed work may require another invocation.
 
-Signals surface lifecycle milestones that you can pipe into analytics or
-incident tooling:
+The worker budget stops admission; it does not forcibly interrupt an inline
+handler or a database operation that is already running. Do not call
+`worker.start()` before `worker.runUntilIdle()`, and keep client-owned stores
+open until the worker has finished draining.
 
-```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-signals
+For a continuously running service, use an application-owned worker lifecycle
+and a process supervisor. See
+[Programmatic workers](../workers/programmatic-integration.md) rather than
+wrapping this batch command in an unbounded loop.
 
-```
+## 4. Check configuration before scaling
 
-Call `installSignalHandlers()` during bootstrap before workers or producers
-start emitting events.
+| Symptom | Check |
+| --- | --- |
+| Enqueue succeeds, but no work runs | A worker process is running; it uses the same broker URL and subscribes to the selected queue |
+| Worker logs an unknown task | That worker registers `infrastructure.double` with a compatible definition |
+| Work completes, but the observer finds no result | Producer, worker, and observer use the same result backend and namespace; retention has not expired |
+| Results appear more than once externally | The side effect needs an idempotency key; leases and acknowledgements do not provide exactly-once effects |
+| A workflow does not survive restart | In addition to the broker/backend, its workflow store must be persistent and the definitions must be re-registered |
 
-## 6. What’s Next
+Changing an environment variable alone does not create adapters. This example
+reads the URLs explicitly and passes `StemRedisAdapter` to `StemClient.fromUrl`.
+To use PostgreSQL, add its package and adapter registration too.
 
-- Keep the infrastructure running and head to
-  [Observe & Operate](./observability-and-ops.md) to enable telemetry, inspect
-  heartbeats, replay DLQs, and issue remote control commands.
-- Browse the runnable examples under `packages/stem/example/` for
-  Redis/Postgres, mixed-cluster, autoscaling, scheduler observability, and
-  signing-key rotation drills you can adapt to your environment.
+## 5. Add one operational feature at a time
+
+- **Routing:** keep producer rules and worker subscriptions aligned. See
+  [Routing](../core-concepts/routing.md).
+- **Recurring jobs:** a schedule entry still needs a running scheduler to
+  publish due tasks. See [Beat guide](../scheduler/beat-guide.md).
+- **Visibility:** observe queue counts, retained results, and worker health
+  before changing concurrency. See [Observe & Operate](./observability-and-ops.md).
+- **Recovery:** test process termination, lease expiry, and idempotent
+  redelivery against the selected adapter.
+- **Workflow persistence:** use the
+  [workflow path](../workflows/getting-started.md), not task-result storage alone.
+
+Signals run in the process that emits them. If another service needs durable
+notifications, build that integration explicitly; an in-process listener is
+not a persisted event stream.
+
+For deployment tradeoffs, continue with [Broker caveats](../brokers/caveats.md)
+and the [Production checklist](./production-checklist.md).

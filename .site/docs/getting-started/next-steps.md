@@ -5,85 +5,39 @@ sidebar_position: 8
 slug: /getting-started/next-steps
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+## Hosted workflows
 
-Use this page as a jump table once you’ve finished the first walkthroughs.
+Read [Workflow getting started](../workflows/getting-started.md), then:
 
-## Calling tasks
+- [Flows and Scripts](../workflows/flows-and-scripts.md)
+- [Starting and Waiting](../workflows/starting-and-waiting.md)
+- [Suspensions and Events](../workflows/suspensions-and-events.md)
+- [Errors, Retries, and Idempotency](../workflows/errors-retries-and-idempotency.md)
+- [Context and Serialization](../workflows/context-and-serialization.md)
 
-- [Producer API](../core-concepts/producer.md)
-- [Tasks & Retries](../core-concepts/tasks.md)
-- [Retry & Backoff](./retry-backoff.md)
+`WorkflowHost.inMemory` is process-local. For production, use
+`WorkflowHost.create`, configure a persistent adapter, save run IDs, and
+re-register compatible definitions after restart. `recover()` re-enqueues a
+bounded batch of runnable runs; it is not exactly-once dispatch and does not
+force-resume a future timer or event wait.
 
-<Tabs>
-<TabItem value="producer" label="Producer enqueue">
+## Generated tasks
 
-```dart title="lib/producer.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-redis
+- [Tasks](../core-concepts/tasks.md) and [Producer API](../core-concepts/producer.md)
+- [Routing](../core-concepts/routing.md), [retry and backoff](./retry-backoff.md),
+  and [uniqueness](../core-concepts/uniqueness.md)
+- [Observability](../core-concepts/observability.md) and the
+  [production checklist](./production-checklist.md)
 
-```
+Tasks and workflow handlers both have at-least-once effects. A successful
+checkpoint does not make an external API call transactional.
 
-</TabItem>
-<TabItem value="task" label="Task handler">
+## Flutter and AI
 
-```dart title="lib/tasks.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-register-redis
+For a Flutter foreground host, use `stem_flutter`'s
+`WorkflowHostController` and `WorkflowHostScope`; see the
+[`stem_flutter` package README](https://pub.dev/packages/stem_flutter).
 
-```
-
-</TabItem>
-</Tabs>
-
-## Canvas/Workflows
-
-- [Canvas Patterns](../core-concepts/canvas.md)
-- [Workflows](../workflows/index.md)
-
-```dart title="lib/canvas_chain.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/canvas_chain.dart#canvas-chain
-
-```
-
-## Routing
-
-- [Routing](../core-concepts/routing.md)
-
-```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-inline
-
-```
-
-## Remote control
-
-- [CLI & Control](../core-concepts/cli-control.md)
-- [Worker Control CLI](../workers/worker-control.md)
-
-```dart title="lib/worker_control.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-autoscale
-
-```
-
-## Observability & ops
-
-- [Observability](../core-concepts/observability.md)
-- [Dashboard](../core-concepts/dashboard.md)
-- [Production Checklist](./production-checklist.md)
-
-```dart title="lib/observability.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-metrics
-
-```
-
-## Timezone
-
-- [Scheduler](../scheduler/index.md)
-- [Beat Scheduler Guide](../scheduler/beat-guide.md)
-
-```dart title="lib/scheduler.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-specs
-
-```
-
-## Optimization
-
-- [Rate Limiting](../core-concepts/rate-limiting.md)
-- [Uniqueness](../core-concepts/uniqueness.md)
-- [Payload Signing](../core-concepts/signing.md)
-
-```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-task
-
-```
+For AI-assisted authoring, [AI skills](./ai-skills.md) explains the official
+Dart package-skills installation flow and the skills included in Stem's source.
+Older pub.dev releases may not include them.

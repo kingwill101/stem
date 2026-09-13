@@ -151,14 +151,20 @@ dependencies out of core:
 final host = await WorkflowHost.create(
   workflows: [greeting],
   createApp: (definitions) => StemWorkflowApp.fromUrl(
-    'sqlite:///path/to/workflows.sqlite',
+    'sqlite:///path/to/broker.sqlite',
     adapters: const [StemSqliteAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'sqlite:///path/to/backend.sqlite',
+      workflow: 'sqlite:///path/to/workflows.sqlite',
+    ),
     workflows: definitions,
   ),
 );
 ```
 
 This snippet also requires `package:stem_sqlite/stem_sqlite.dart`.
+Use separate SQLite files for delivery, results, and workflow state to reduce
+writer contention, and reopen the same paths and namespace after restart.
 After closing and reopening with the same durable storage, re-register
 executable definitions and use:
 

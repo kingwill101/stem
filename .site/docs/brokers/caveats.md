@@ -35,8 +35,8 @@ queue-only adapter can implement `QueueBroker` without implementing the
 optional operations; consumers that need one can check its capability
 interface or use the adapter's `BrokerCapabilities` snapshot instead of
 assuming every transport has identical operational semantics. The historical
-`Broker` facade supplies compatibility defaults that throw
-`UnsupportedError` for operations an adapter does not support.
+`Broker` facade supplies compatibility defaults that throw `UnsupportedError`
+for operations an adapter does not support.
 
 ## Delivery and recovery matrix
 
@@ -92,8 +92,8 @@ uses the legacy unconditional `ResultBackend.set` path.
   via row locks; latency depends on the poll interval.
 - **Single-writer constraint**: SQLite allows one writer at a time. Use
   separate broker/backend files and avoid producer writes to the backend.
-- **Native assets**: build CLI bundles (`dart build cli`) when using `sqlite3`
-  to ensure the native library is packaged reliably.
+- **Native assets**: `sqlite3` uses native assets. For CLI distribution, build
+  and run a CLI bundle so the native library is packaged with the executable.
 - **Local disk only**: avoid network filesystems for WAL-backed SQLite files.
 
 ## Redis Streams broker
@@ -106,8 +106,9 @@ uses the legacy unconditional `ResultBackend.set` path.
 - **Broadcast channels**: broadcasts are stored in per-channel streams and
   consumed via dedicated consumer groups.
 - **Visibility timeouts**: the broker reclaims idle deliveries via
-  `XAUTOCLAIM`. Extending a lease requeues the task into the delayed set
-  (it does not update the original stream entry).
+  `XAUTOCLAIM`. Extending a lease uses `XCLAIM ... TIME` to reset the pending
+  stream entry's delivery time in place; it does not acknowledge and publish a
+  delayed copy.
 - **Key eviction risk**: Redis eviction policies can drop stream, delayed, or
   dead-letter keys. Use a maxmemory policy that avoids evicting Stem keys, or
   isolate Stem data in a dedicated Redis instance.
@@ -122,7 +123,7 @@ uses the legacy unconditional `ResultBackend.set` path.
 - **Dead letter retention**: dead letters are retained for a default window
   (7 days) unless configured otherwise.
 - **Broadcast channels**: broadcasts are stored in a separate table and read
-  alongside queue deliveries.
+  through their broadcast subscription path, not as queue jobs.
 
 ## Result backend caveat (ordering)
 

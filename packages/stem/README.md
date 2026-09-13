@@ -1,28 +1,191 @@
-<p align="center">
-  <img src="../../.site/static/img/stem-logo.png" width="300" alt="Stem Logo" />
-</p>
+# Stem
 
 [![pub package](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem)
 [![Dart](https://img.shields.io/badge/dart-%3E%3D3.13-blue.svg)](https://dart.dev/)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
 
-# Stem
+Stem is an experimental Dart-first library for background tasks and durable
+workflows. It provides task definitions, workers, queues, retries, scheduling,
+workflow state, and pluggable broker/result-store adapters.
 
-Stem is an experimental Dart-first background job and workflow platform:
-enqueue work, run workers, and orchestrate durable workflows while the runtime
-contracts and adapter guarantees continue to harden.
+## Choose your starting point
 
-For full docs, API references, and in-depth guides, visit
-https://kingwill101.github.io/stem.
+- **A generated task** is the best default for application code. Annotate a
+  typed function or workflow with `stem_builder`, run the generator, and use
+  the generated definitions. See the [builder examples](example/annotated_workflows/).
+- **`WorkflowHost`** is for typed workflow submission, results, status,
+  cancellation, durable sleeps, and event waits. Start with the
+  [typed workflow host guide](doc/workflow_host.md) and its
+  [runnable hosted example](example/workflows/hosted.dart).
+- **A manual `TaskDefinition<TArgs, TResult>`** is a typed task without code generation.
+  The map-based APIs in `package:stem/advanced.dart` are for custom
+  transports and migrations, not the usual first application.
 
-For JS/event-driven producers, task batches, and one-shot scheduling, see the
-[portable runtime integration guide](doc/portable-runtime.md).
+## Install
 
-For production-shaped task definitions, prefer `stem_builder` generated typed
-definitions. Manual `TaskDefinition<TArgs, TResult>` is the supported typed
-fallback. Low-level map handlers live under `package:stem/advanced.dart` for
-transport integrations and migrations.
+```bash
+dart pub add stem
+# Optional code generation:
+dart pub add --dev stem_builder build_runner
+```
+
+The current package requires **Dart SDK 3.13 or newer**
+(`>=3.13.0 <4.0.0`). This floor is part of the current source package; choose a
+released package version whose SDK constraint matches your application if you
+use an older SDK.
+
+Repository examples describe this source version, which can be ahead of pub.dev.
+Use the documentation for your resolved release when an API shown here is not
+available in your installed package.
+
+Application code can import `package:stem/stable.dart`. The historical
+`package:stem/stem.dart` barrel remains available for compatibility. For
+in-memory implementations, use `package:stem/memory.dart`.
+
+## A complete typed task
+
+This runnable in-memory example is deterministic: `enqueueAndWait` waits for
+the worker result rather than guessing with `Future.delayed`. The `finally`
+block closes resources when the handler fails too.
+
+```dart
+import 'dart:async';
+
+import 'package:stem/stable.dart';
+
+class GreetingArgs {
+  const GreetingArgs({required this.name});
+
+  final String name;
+
+  Map<String, dynamic> toJson() => {'name': name};
+
+  factory GreetingArgs.fromJson(Map<String, dynamic> json) =>
+      GreetingArgs(name: json['name'] as String);
+}
+
+final greetingDefinition = TaskDefinition<GreetingArgs, String>.json(
+  name: 'demo.greeting',
+  decodeArgsJson: GreetingArgs.fromJson,
+);
+
+final greetingTask = greetingDefinition.handler(
+  entrypoint: (context, args) async => 'Hello, ${args.name}!',
+);
+
+Future<void> main() async {
+  final client = await StemClient.inMemory(tasks: [greetingTask]);
+  final worker = await client.createWorker();
+  unawaited(worker.start());
+
+  try {
+    final result = await greetingDefinition.enqueueAndWait(
+      client,
+      const GreetingArgs(name: 'Stem'),
+    );
+    print(result?.value); // Hello, Stem!
+  } finally {
+    await worker.shutdown();
+    await client.close();
+  }
+}
+```
+
+For a map-based first-steps example, see
+[`first_steps.dart`](example/docs_snippets/lib/first_steps.dart). For
+annotations and generated definitions, see the
+[`stem_builder` package](https://pub.dev/packages/stem_builder) and run:
+
+```bash
+dart run build_runner build
+```
+
+## Typed workflows
+
+Use `WorkflowHost.inMemory` when the host should create, start, and own the
+workflow application. The following is a fragment for an async function with
+`package:stem/stem.dart` imported; see the linked example for a complete program:
+
+```dart
+final greeting = HostedWorkflow<String, String>(
+  name: 'greeting',
+  run: (context, name) async => 'Hello, ${name.trim()}!',
+);
+
+final host = await WorkflowHost.inMemory(workflows: [greeting]);
+try {
+  final run = await host.submit(greeting, ' Ada ');
+  print(await run.result); // Hello, Ada!
+} finally {
+  await host.close();
+}
+```
+
+The [workflow host guide](doc/workflow_host.md) covers durable checkpoints and
+sleeps, event waits, typed codecs, persistent restart, observation versus
+cancellation, and adapter configuration. Reattaching with `host.observe`
+observes an existing run; it does not submit a second execution.
+
+## Adapters and deployment shape
+
+The core package includes in-memory adapters for local development and tests.
+For durable or shared storage, choose an adapter package and configure it
+through the relevant `StemApp`/`StemWorkflowApp` factory:
+
+- [`stem_redis`](https://pub.dev/packages/stem_redis) — Redis Streams broker,
+  result backend, and workflow store.
+- [`stem_postgres`](https://pub.dev/packages/stem_postgres) — Postgres broker, result backend, and
+  scheduler stores.
+- [`stem_sqlite`](https://pub.dev/packages/stem_sqlite) — SQLite queue, results,
+  and workflow storage for local persistence.
+
+Adapter packages own their connection settings and operational requirements.
+Read their package README and the
+[adapter guide](https://kingwill101.github.io/stem/) before selecting one.
+Core does not promise identical delivery, change-feed, or durability behavior
+across adapters. A broker can redeliver work, so task side effects should
+tolerate retries and duplicate delivery.
+
+## Capabilities and boundaries
+
+- Tasks support typed definitions, queues, delayed enqueue, priorities,
+  idempotency helpers, retries, task results, and worker controls.
+- Workflows persist checkpoints and can resume through the configured store.
+  `WorkflowHost` adds typed submission and observation; it does not forcibly
+  stop executing Dart code or roll back external side effects.
+- Scheduling, observability, signing, dashboards, and CLI operations are
+  available in surrounding packages and examples, with their own configuration
+  and dependencies.
+- In-memory storage is process-local and intended for development/tests. It
+  cannot provide persistence across process death.
+- Delivery is not exactly once. Durable state does not make external effects
+  transactional; use application-level idempotency keys and transactions where
+  those effects require them.
+
+See the [getting started guide](https://kingwill101.github.io/stem/) and
+[all examples](example/) for supported setup paths and complete topologies.
+
+## AI skills
+
+With the official Dart skills tooling, install Stem skills with:
+
+```bash
+dart run skills@ get -p stem
+```
+
+Only package versions that ship the skills definitions can provide these
+skills. The command does not replace Stem documentation or package setup.
+
+## CLI
+
+Install the optional CLI package to use the `stem` executable:
+
+```bash
+dart pub add --dev stem_cli
+dart run stem_cli:stem --help
+dart run stem_cli:stem worker --help
+dart run stem_cli:stem wf --help
+```
 
 ## Interrupted deliveries
 
@@ -54,471 +217,5 @@ in-process signals, not a durable notification outbox. They require retained
 running status and a broker that redelivers unacknowledged work. An in-memory
 backend cannot retain this evidence across process death. A previous worker may
 still be executing after lease loss. Neither replay nor retry provides
-exactly-once execution or makes non-idempotent side effects safe; use idempotency
-keys and transactional application-level safeguards.
-
-## Packages
-
-| Package | Description | pub.dev |
-|---------|-------------|---------|
-| [`stem`](https://github.com/kingwill101/stem/tree/master/packages/stem) | Core runtime: contracts, worker, scheduler, in-memory adapters, signals, Canvas, workflows | [![pub](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem) |
-| [`stem_cli`](https://github.com/kingwill101/stem/tree/master/packages/stem_cli) | Command-line tooling (`stem` executable) and CLI utilities | [![pub](https://img.shields.io/pub/v/stem_cli.svg)](https://pub.dev/packages/stem_cli) |
-| [`stem_memory`](https://github.com/kingwill101/stem/tree/master/packages/stem_memory) | Compatibility package for the explicit `package:stem/memory.dart` in-memory library | [![pub](https://img.shields.io/pub/v/stem_memory.svg)](https://pub.dev/packages/stem_memory) |
-| [`stem_sqlite`](https://github.com/kingwill101/stem/tree/master/packages/stem_sqlite) | SQLite broker and result backend for local dev/testing | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
-| [`stem_redis`](https://github.com/kingwill101/stem/tree/master/packages/stem_redis) | Redis Streams broker, result backend, and watchdog helpers | [![pub](https://img.shields.io/pub/v/stem_redis.svg)](https://pub.dev/packages/stem_redis) |
-| [`stem_postgres`](https://github.com/kingwill101/stem/tree/master/packages/stem_postgres) | Postgres broker, result backend, and scheduler stores | [![pub](https://img.shields.io/pub/v/stem_postgres.svg)](https://pub.dev/packages/stem_postgres) |
-| [`stem_flutter`](https://github.com/kingwill101/stem/tree/master/packages/stem_flutter) | Flutter bootstrap for standard Stem applications | [![pub](https://img.shields.io/pub/v/stem_flutter.svg)](https://pub.dev/packages/stem_flutter) |
-| [`stem_flutter_sqlite`](https://github.com/kingwill101/stem/tree/master/packages/stem_flutter_sqlite) | Managed SQLite storage and Ormed setup for Flutter Stem apps | [![pub](https://img.shields.io/pub/v/stem_flutter_sqlite.svg)](https://pub.dev/packages/stem_flutter_sqlite) |
-| [`stem_builder`](https://github.com/kingwill101/stem/tree/master/packages/stem_builder) | Build-time code generator for annotated tasks and workflows | [![pub](https://img.shields.io/pub/v/stem_builder.svg)](https://pub.dev/packages/stem_builder) |
-| [`stem_adapter_tests`](https://github.com/kingwill101/stem/tree/master/packages/stem_adapter_tests) | Shared contract test suites for adapter implementations | [![pub](https://img.shields.io/pub/v/stem_adapter_tests.svg)](https://pub.dev/packages/stem_adapter_tests) |
-| [`stem_dashboard`](https://github.com/kingwill101/stem/tree/master/packages/dashboard) | Hotwire-based operations dashboard (experimental) | — |
-
-## Features
-
-- **Task pipeline** - enqueue with delays, priorities, idempotency helpers, and retries.
-- **Workers** - isolate pools with soft/hard time limits, autoscaling, and remote control (`stem worker ping|revoke|shutdown`).
-- **Scheduling** - Beat-style scheduler with interval/cron/solar/clocked entries and drift tracking.
-- **Workflows** - Durable `Flow` runtime with pluggable stores (in-memory,
-  Redis, Postgres, SQLite) and CLI introspection via `stem wf`.
-- **Observability** - Dartastic OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
-- **Security** - Payload signing (HMAC or Ed25519), TLS automation scripts, revocation persistence.
-- **Adapters** - In-memory drivers included here; Redis Streams and Postgres adapters ship via the `stem_redis` and `stem_postgres` packages.
-- **Quality tooling** - Package-level format, analysis, test, adapter contract,
-  chaos, benchmark, and standalone-resolution gates in CI.
-
-## Install
-
-```bash
-dart pub add stem
-# Optional adapters
-dart pub add stem_redis     # Redis broker/backend
-dart pub add stem_postgres  # Postgres broker/backend
-dart pub add stem_sqlite    # SQLite broker/backend
-dart pub add -d stem_builder # for annotations/codegen (optional)
-dart pub add -d stem_cli      # for CLI tooling
-```
-
-New application code can import `package:stem/stable.dart`. The historical
-`package:stem/stem.dart` barrel remains available for compatibility, while
-custom transports and instrumentation can use `package:stem/advanced.dart`.
-
-For local development and tests, import the in-memory implementations
-explicitly with `package:stem/memory.dart`; the `stem_memory` package remains
-as a compatibility export for existing applications.
-
-
-## Examples
-
-`StemApp` and `StemWorkflowApp` never start their managed worker implicitly.
-Call `start()` explicitly when the process is intended to consume work.
-`StemWorkflowApp` also exposes `startRuntime()` and `startWorker()` when you
-want those lifecycles split.
-
-### Minimal in-memory task + worker
-
-```dart
-import "dart:async";
-import "package:stem/stable.dart";
-
-class HelloArgs {
-  const HelloArgs({required this.name});
-
-  final String name;
-
-  Map<String, dynamic> toJson() => {"name": name};
-
-  factory HelloArgs.fromJson(Map<String, dynamic> json) =>
-      HelloArgs(name: json["name"] as String);
-}
-
-final helloDefinition = TaskDefinition<HelloArgs, void>.json(
-  name: "demo.hello",
-  decodeArgsJson: HelloArgs.fromJson,
-);
-
-final helloTask = helloDefinition.handler(
-  entrypoint: (context, args) async => print("Hello ${args.name}"),
-);
-
-Future<void> main() async {
-  final client = await StemClient.inMemory(tasks: [helloTask]);
-  final worker = await client.createWorker();
-  unawaited(worker.start());
-
-  await client.enqueueCall(
-    helloDefinition.buildCall(const HelloArgs(name: "Stem")),
-  );
-  await Future<void>.delayed(const Duration(seconds: 1));
-
-  await worker.shutdown();
-  await client.close();
-}
-```
-
-### Reusable stack from URL (Redis)
-
-```dart
-import "package:stem/stable.dart";
-import "package:stem_redis/stem_redis.dart";
-
-Future<void> main() async {
-  final client = await StemClient.fromUrl(
-    "redis://localhost:6379",
-    adapters: const [StemRedisAdapter()],
-    overrides: const StemStoreOverrides(
-      backend: "redis://localhost:6379/1",
-    ),
-    tasks: [HelloTask()],
-  );
-
-  final worker = await client.createWorker();
-  unawaited(worker.start());
-
-  await client.enqueueValue("demo.hello", const {"name": "Redis"});
-  await Future<void>.delayed(const Duration(seconds: 1));
-
-  await worker.shutdown();
-  await client.close();
-}
-```
-
-### Typed task definition and waiting for result
-
-```dart
-class HelloArgs {
-  const HelloArgs({required this.name});
-  final String name;
-
-  Map<String, dynamic> toJson() => {"name": name};
-  factory HelloArgs.fromJson(Map<String, dynamic> json) =>
-      HelloArgs(name: json["name"] as String);
-}
-
-final helloDefinition = TaskDefinition<HelloArgs, String>.json(
-  name: "demo.hello2",
-  decodeArgsJson: HelloArgs.fromJson,
-  metadata: const TaskMetadata(description: "typed hello task"),
-);
-
-final helloTask = helloDefinition.handler(
-  entrypoint: (context, args) async => "Hello ${args.name}",
-);
-
-Future<void> main() async {
-  final client = await StemClient.inMemory(tasks: [helloTask]);
-  final worker = await client.createWorker();
-  unawaited(worker.start());
-
-  final result = await helloDefinition.enqueueAndWait(
-    client,
-    const HelloArgs(name: "Typed"),
-  );
-  print(result?.value);
-
-  await worker.shutdown();
-  await client.close();
-}
-```
-
-### Typed workflow host
-
-Use `WorkflowHost` for typed submission, result/status handles, named
-checkpoints, durable sleeps, and typed event waits. Unlike constructing a
-`StemWorkflowApp` directly, an owned host starts its app during creation.
-Borrowed hosts leave lifecycle management to the caller.
-
-See the [host guide](doc/workflow_host.md) and
-[runnable example](example/workflows/hosted.dart), including persistent
-reattachment and observation-versus-cancellation semantics.
-
-### Workflow quick-start (Flow)
-
-```dart
-import "package:stem/stable.dart";
-
-final onboardingFlow = Flow<String>(
-  name: "demo.onboarding",
-  build: (flow) {
-    flow.step("welcome", (ctx) async {
-      return "Welcome ${ctx.requiredParam<String>("name")}";
-    });
-    flow.step("done", (ctx) async => "Done");
-  },
-);
-
-Future<void> main() async {
-  final appClient = await StemClient.inMemory();
-  final app = await appClient.createWorkflowApp(
-    flows: [onboardingFlow],
-  );
-  await app.start();
-
-  final ref = onboardingFlow.refJson(HelloArgs.fromJson);
-  final runId = await ref.start(app, params: const HelloArgs(name: "Stem"));
-  final result = await ref.waitFor(app, runId);
-
-  print(result?.value);
-  await app.shutdown();
-  await appClient.close();
-}
-```
-
-### Annotated workflow + task with `stem_builder`
-
-```dart
-import "package:stem/stable.dart";
-import "package:stem_builder/stem_builder.dart";
-
-part "definitions.stem.g.dart";
-
-@WorkflowDefn(name: "builder.signup", kind: WorkflowKind.script)
-class BuilderSignupWorkflow {
-  Future<String> run(String email) async {
-    final userId = await createUser(email);
-    await finalizeSignup(userId: userId);
-    return userId;
-  }
-
-  @WorkflowStep(name: "create-user")
-  Future<String> createUser(String email) async {
-    return "user-$email";
-  }
-
-  @WorkflowStep(name: "finalize")
-  Future<void> finalizeSignup({required String userId}) async {}
-}
-
-@TaskDefn(name: "builder.send_welcome")
-Future<void> sendWelcomeEmail(
-  String email, {
-  TaskExecutionContext? context,
-}) async {
-  // optional: use context for logger/meta/retry helpers
-}
-```
-
-```bash
-dart run build_runner build
-
-# After generation, use module + generated defs
-```
-
-```dart
-// example usage after codegen
-final client = await StemClient.inMemory(module: stemModule);
-final app = await client.createWorkflowApp();
-await app.start();
-
-final runId = await StemWorkflowDefinitions.builderSignup.startAndWait(
-  app,
-  "alice@example.com",
-);
-final result = await StemWorkflowDefinitions.builderSignup.waitFor(app, runId);
-print(result?.value); // {user: alice@example.com}
-```
-
-### Workflow with multiple worker queues
-
-```dart
-import "package:stem/stable.dart";
-import "package:stem/advanced.dart";
-
-final onboardingFlow = Flow<Map<String, String>>(
-  name: "workflow.multi_workers",
-  build: (flow) {
-    flow.step("dispatch", (ctx) async {
-      final notifyTaskId = await ctx.enqueue(
-        "notify.send",
-        args: {"email": "alex@example.com"},
-        enqueueOptions: const TaskEnqueueOptions(queue: "notifications"),
-      );
-      final analyticsTaskId = await ctx.enqueue(
-        "analytics.track",
-        args: {"userId": "alex", "event": "account.created"},
-        enqueueOptions: const TaskEnqueueOptions(queue: "analytics"),
-      );
-      return {"notifyTaskId": notifyTaskId, "trackTaskId": analyticsTaskId};
-    });
-  },
-);
-
-class NotifyTask extends TaskHandler<String> {
-  @override
-  String get name => "notify.send";
-
-  @override
-  TaskOptions get options => const TaskOptions(queue: "notifications");
-
-  @override
-  Future<String> call(TaskContext context, Map<String, Object?> args) async =>
-      "notified:${args['email']}";
-}
-
-class AnalyticsTask extends TaskHandler<String> {
-  @override
-  String get name => "analytics.track";
-
-  @override
-  TaskOptions get options => const TaskOptions(queue: "analytics");
-
-  @override
-  Future<String> call(TaskContext context, Map<String, Object?> args) async =>
-      "tracked:${args['event']}";
-}
-
-Future<void> main() async {
-  final client = await StemClient.inMemory();
-  final app = await client.createWorkflowApp(
-    flows: [onboardingFlow],
-    workerConfig: const StemWorkerConfig(queue: "workflow"),
-  );
-  await app.start();
-
-  final notifications = await client.createWorker(
-    workerConfig: StemWorkerConfig(
-      queue: "notifications-worker",
-      consumerName: "notifications-worker",
-      subscription: RoutingSubscription.singleQueue("notifications"),
-    ),
-    tasks: [NotifyTask()],
-  );
-  final analytics = await client.createWorker(
-    workerConfig: StemWorkerConfig(
-      queue: "analytics-worker",
-      consumerName: "analytics-worker",
-      subscription: RoutingSubscription.singleQueue("analytics"),
-    ),
-    tasks: [AnalyticsTask()],
-  );
-
-  await notifications.start();
-  await analytics.start();
-
-  final result = await onboardingFlow.startAndWait(app);
-  final taskIds = result?.value ?? const <String, String>{};
-  print(await app.waitForTask<String>(taskIds['notifyTaskId']!));
-  print(await app.waitForTask<String>(taskIds['trackTaskId']!));
-
-  await notifications.shutdown();
-  await analytics.shutdown();
-  await app.close();
-  await client.close();
-}
-```
-
-### 5) CLI at a glance
-
-```bash
-# Start a worker or run built-in introspection commands
-stem --help
-stem worker start --help
-stem wf --help
-```
-
-
-### General worker management (multi-worker setup)
-
-```dart
-import "package:stem/stable.dart";
-import "package:stem/advanced.dart";
-
-class EmailTask extends TaskHandler<void> {
-  @override
-  String get name => "notify.send";
-
-  @override
-  TaskOptions get options => const TaskOptions(queue: "notify");
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    print("notify queue: ${args['to']}");
-  }
-}
-
-class ReportTask extends TaskHandler<void> {
-  @override
-  String get name => "reports.aggregate";
-
-  @override
-  TaskOptions get options => const TaskOptions(queue: "reports");
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    print("reports queue: ${args['reportId']}");
-  }
-}
-
-Future<void> main() async {
-  final client = await StemClient.inMemory();
-
-  final notifyWorker = await client.createWorker(
-    workerConfig: StemWorkerConfig(
-      queue: "notify-worker",
-      consumerName: "notify-worker",
-      subscription: RoutingSubscription.singleQueue("notify"),
-    ),
-    tasks: [EmailTask()],
-  );
-
-  final reportsWorker = await client.createWorker(
-    workerConfig: StemWorkerConfig(
-      queue: "reports-worker",
-      consumerName: "reports-worker",
-      subscription: RoutingSubscription.singleQueue("reports"),
-    ),
-    tasks: [ReportTask()],
-  );
-
-  await notifyWorker.start();
-  await reportsWorker.start();
-
-  await client.enqueue(
-    "notify.send",
-    args: {"to": "ops@example.com"},
-  );
-  await client.enqueue(
-    "reports.aggregate",
-    args: {"reportId": "r-2026-q1"},
-  );
-
-  await Future<void>.delayed(const Duration(milliseconds: 400));
-
-  await notifyWorker.shutdown();
-  await reportsWorker.shutdown();
-  await client.close();
-}
-```
-
-- Full example that combines a workflow dispatching to dedicated workers:
-  [multiple_workers.dart](example/workflows/multiple_workers.dart)
-
-## Want depth?
-
-This README is intentionally example-focused.
-For implementation details, runtime semantics, adapter tuning, and operational playbooks,
-see the full docs at https://kingwill101.github.io/stem.
-
-
-## Documentation & Examples
-
-
-- Guided onboarding: [Guided onboarding](.site/docs/getting-started/) (install → infra → ops → production).
-- Examples (each has its own README):
-- [workflows](example/workflows/) - end-to-end workflow samples (in-memory, sleep/event, SQLite, Redis). See `versioned_rewind.dart` for auto-versioned step rewinds.
-- [multiple_workers.dart](example/workflows/multiple_workers.dart) - workflow dispatching tasks to `notifications` and `analytics` workers.
-- [cancellation_policy](example/workflows/cancellation_policy.dart) - demonstrates auto-cancelling long workflows using `WorkflowCancellationPolicy`.
-- [rate_limit_delay](example/rate_limit_delay) - delayed enqueue, priority clamping, Redis rate limiter.
-- [dlq_sandbox](example/dlq_sandbox) - dead-letter inspection and replay via CLI.
-- [autoscaling_demo](example/autoscaling_demo) - autoscaling worker concurrency under queue backlog.
-- [scheduler_observability](example/scheduler_observability) - Beat drift metrics, schedule signals, and CLI checks.
-- [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) - production-style topologies.
-- [progress_heartbeat](example/progress_heartbeat) - task progress + heartbeat reporting.
-- [task_context_mixed](example/task_context_mixed) - TaskContext + TaskInvocationContext enqueue patterns, plus Celery-style apply_async options.
-- [task_usage_patterns.dart](example/task_usage_patterns.dart) - in-memory TaskContext enqueue, TaskInvocationContext builder, and typed enqueue calls.
-- [worker_control_lab](example/worker_control_lab) - worker ping/stats/revoke/shutdown drills.
-- [unique_tasks](example/unique_tasks/unique_task_example.dart) - enables `TaskOptions.unique` with a shared lock store.
-- [signing_key_rotation](example/signing_key_rotation) - rotate HMAC signing keys with overlap.
-- [ops_health_suite](example/ops_health_suite) - CLI health checks + queue/worker snapshots.
-- [security examples](example/security/*) - payload signing + TLS profiles.
-- [postgres_tls](example/postgres_tls) - Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
-- [otel_metrics](example/otel_metrics) - OTLP collectors + Grafana dashboards.
+exactly-once execution or makes non-idempotent side effects safe; use
+idempotency keys and transactional application-level safeguards.

@@ -3,7 +3,9 @@ title: Context and Serialization
 ---
 
 Stem injects context objects at specific points in the workflow/task lifecycle.
-Everything else that crosses a durable boundary must be serializable.
+Everything else that crosses a durable boundary must be serializable. The
+examples below show API shapes, not complete programs; they assume the
+corresponding `stem.dart` import and definitions from the runnable examples.
 
 ## Supported context injection points
 
@@ -96,7 +98,7 @@ starts or other replay-sensitive side effects.
 
 ## Serializable parameter rules
 
-Supported shapes:
+Supported shapes for the built-in JSON-like payload paths:
 
 - `String`
 - `bool`
@@ -104,7 +106,7 @@ Supported shapes:
 - `double`
 - `num`
 - JSON-like scalar values (`Object?` only when the runtime value is itself
-  serializable)
+  serializable), including `null`
 - `List<T>` where `T` is serializable
 - `Map<String, T>` where `T` is serializable
 
@@ -187,6 +189,13 @@ The encoded value must still satisfy its destination's payload shape. Full
 task args and workflow params must encode to string-keyed maps, not JSON text.
 Result and nested-value codecs may encode other serializable shapes where
 the destination permits them.
+
+Scalar and nullable codecs are valid for results and nested values when that
+destination accepts those shapes. They do not change the shape required by
+workflow start params, full task args, or resume-event transport: those paths
+still require a string-keyed map. A codec may preserve `null`, but APIs that
+return `T?` use `null` as the “not resumed yet” sentinel unless the runtime
+control path supplies an explicit resume envelope.
 
 The same rule applies to workflow resume events: `emitValue(...)` can take a
 typed DTO plus a `Codec<T, Object?>`, but the codec must still encode to a
