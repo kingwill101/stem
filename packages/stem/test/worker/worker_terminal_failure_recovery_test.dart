@@ -264,6 +264,51 @@ void main() {
     expect(task.finalizedEnvelopes.single.attempt, 2);
     expect(await broker.inflightCount('default'), 0);
   });
+
+  test(
+    'effects-complete recovery settles without requiring the callback handler',
+    () async {
+      final broker = _QueueOnlyBroker(InMemoryBroker());
+      final backend = InMemoryResultBackend();
+      final task = _ExplicitRetryTask();
+      addTearDown(broker.close);
+      addTearDown(backend.close);
+      final envelope = Envelope(name: task.name, args: const {});
+      final marker = <String, Object?>{
+        'version': 1,
+        'state': 'effects-complete',
+        'action': 'nack',
+        'envelope': envelope.toJson(),
+        'context': {
+          'authenticated': true,
+          'opaque': ['retained'],
+        },
+        'future-field': 'retained',
+      };
+      await backend.set(
+        envelope.id,
+        TaskState.failed,
+        attempt: envelope.attempt,
+        meta: {'stem.terminalFailureEnvelope': marker},
+      );
+      await broker.publish(envelope);
+
+      final incompatible = FunctionTaskHandler<void>.inline(
+        name: task.name,
+        entrypoint: (_, _) =>
+            fail('effects-complete must skip callback lookup'),
+      );
+      await _drainRecovery(broker, backend, incompatible);
+
+      expect(task.finalizations, 0);
+      expect(broker.discards, 1);
+      final persisted = await backend.get(envelope.id);
+      expect(
+        persisted!.meta['stem.terminalFailureEnvelope'],
+        equals({...marker, 'state': 'done'}),
+      );
+    },
+  );
 }
 
 Future<void> _expectInvalidRecovery({

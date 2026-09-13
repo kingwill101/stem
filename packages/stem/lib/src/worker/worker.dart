@@ -150,6 +150,7 @@ const _terminalFailureEnvelopeKey = 'stem.terminalFailureEnvelope';
 const _terminalFailureLifecycleKey = 'state';
 const _terminalFailureActionKey = 'action';
 const _terminalFailurePending = 'pending';
+const _terminalFailureEffectsComplete = 'effects-complete';
 const _terminalFailureDone = 'done';
 const _terminalFailureDeadLetterAction = 'dead-letter';
 const _terminalFailureNackAction = 'nack';
@@ -1047,12 +1048,6 @@ class Worker {
         try {
           _scheduleLeaseRenewal(delivery);
           final handler = registry.resolve(envelope.name);
-          if (handler == null) {
-            await _deadLetterOrDiscard(delivery, reason: 'unregistered-task');
-            await _releaseUniqueLock(envelope);
-            return;
-          }
-
           final argsEncoder = _resolveArgsEncoder(handler);
           final resultEncoder = _resolveResultEncoder(handler);
 
@@ -1088,6 +1083,14 @@ class Worker {
               delivery: delivery,
               resultEncoder: resultEncoder,
             );
+            return;
+          }
+
+          // Executing a task needs a handler; recovering already-recorded
+          // terminal effects does not. Authentication still precedes both.
+          if (handler == null) {
+            await _deadLetterOrDiscard(delivery, reason: 'unregistered-task');
+            await _releaseUniqueLock(envelope);
             return;
           }
 
@@ -2654,20 +2657,11 @@ class Worker {
         reason: 'terminal-failure-attempt-mismatch',
       );
     }
-    final handler = registry.resolve(envelope.name);
-    if (handler == null) {
-      return _settleInvalidTaskFailureRecovery(
-        delivery,
-        reason: 'terminal-failure-handler-unavailable',
-      );
-    }
-    if (handler is! TaskTerminalFailureHandler) {
-      return _settleInvalidTaskFailureRecovery(
-        delivery,
-        reason: 'terminal-failure-handler-incompatible',
-      );
-    }
-    if (markerMap[_terminalFailureLifecycleKey] == _terminalFailureDone) {
+    final phase = markerMap[_terminalFailureLifecycleKey];
+    // Done and effects-complete markers do not need the callback handler. This
+    // is intentionally checked before resolving handler compatibility so a
+    // deployment can recover settlement after a callback is removed.
+    if (phase == _terminalFailureDone) {
       await _releaseUniqueLock(envelope);
       await _acknowledgements.tryAcknowledge(
         delivery,
@@ -2675,6 +2669,22 @@ class Worker {
         phase: 'completed terminal failure recovery',
       );
       return null;
+    }
+    final effectsComplete = phase == _terminalFailureEffectsComplete;
+    if (!effectsComplete) {
+      final handler = registry.resolve(envelope.name);
+      if (handler == null) {
+        return _settleInvalidTaskFailureRecovery(
+          delivery,
+          reason: 'terminal-failure-handler-unavailable',
+        );
+      }
+      if (handler is! TaskTerminalFailureHandler) {
+        return _settleInvalidTaskFailureRecovery(
+          delivery,
+          reason: 'terminal-failure-handler-incompatible',
+        );
+      }
     }
     await _completeTerminalFailure(
       delivery: delivery,
@@ -2688,6 +2698,7 @@ class Worker {
       action: markerMap[_terminalFailureActionKey] == _terminalFailureNackAction
           ? _terminalFailureNackAction
           : _terminalFailureDeadLetterAction,
+      effectsComplete: effectsComplete,
     );
     return envelope;
   }
@@ -2713,54 +2724,66 @@ class Worker {
     required Object error,
     required StackTrace stack,
     required String action,
+    bool effectsComplete = false,
   }) async {
     final marker = status.meta[_terminalFailureEnvelopeKey];
-    final handler = registry.resolve(envelope.name);
     if (marker is Map &&
         marker[_terminalFailureLifecycleKey] == _terminalFailureDone) {
       return;
     }
-    if (handler is TaskTerminalFailureHandler) {
-      await (handler! as TaskTerminalFailureHandler).onTerminalFailure(
-        envelope,
-        status,
+    if (!effectsComplete) {
+      final handler = registry.resolve(envelope.name);
+      if (handler is TaskTerminalFailureHandler) {
+        await (handler! as TaskTerminalFailureHandler).onTerminalFailure(
+          envelope,
+          status,
+        );
+      }
+      GroupStatus? groupStatus;
+      if (groupId != null) {
+        groupStatus = await backend.addGroupResult(groupId, status);
+      }
+      if (groupStatus != null) await _maybeDispatchChord(groupStatus);
+      StemMetrics.instance.increment(
+        'stem.tasks.failed',
+        tags: {'task': envelope.name, 'queue': envelope.queue},
       );
-    }
-    GroupStatus? groupStatus;
-    if (groupId != null) {
-      groupStatus = await backend.addGroupResult(groupId, status);
-    }
-    if (groupStatus != null) await _maybeDispatchChord(groupStatus);
-    StemMetrics.instance.increment(
-      'stem.tasks.failed',
-      tags: {'task': envelope.name, 'queue': envelope.queue},
-    );
-    _failedCount += 1;
-    _emitEvent(
-      WorkerEvent(
-        type: WorkerEventType.failed,
-        envelope: envelope,
+      _failedCount += 1;
+      _emitEvent(
+        WorkerEvent(
+          type: WorkerEventType.failed,
+          envelope: envelope,
+          error: error,
+          stackTrace: stack,
+        ),
+      );
+      await _signals.taskFailed(
+        envelope,
+        _workerInfoSnapshot,
         error: error,
         stackTrace: stack,
-      ),
-    );
-    await _signals.taskFailed(
-      envelope,
-      _workerInfoSnapshot,
-      error: error,
-      stackTrace: stack,
-    );
-    // Keep the lease outstanding until all recoverable bookkeeping and
-    // linked dispatch have succeeded.
-    await _dispatchLinkedTasks(
-      envelope,
-      onSuccess: false,
-      propagateErrors: marker is Map,
-    );
-    await _releaseUniqueLock(envelope);
-    // Keep the lease outstanding until all recoverable bookkeeping and
-    // callbacks have completed. If any of those operations fail, redelivery
-    // can still observe the pending marker and finish the lifecycle.
+      );
+      // Keep the lease outstanding until all recoverable bookkeeping and
+      // linked dispatch have succeeded.
+      await _dispatchLinkedTasks(
+        envelope,
+        onSuccess: false,
+        propagateErrors: marker is Map,
+      );
+      await _releaseUniqueLock(envelope);
+      if (marker is Map) {
+        // Establish the durable boundary between effects and settlement.
+        // A crash before this write may repeat idempotent effects; a crash
+        // after it retries only settlement.
+        await _writeTerminalFailurePhase(
+          status,
+          marker,
+          _terminalFailureEffectsComplete,
+        );
+      }
+    }
+    // Effects are durably complete before permanent settlement. A settlement
+    // failure leaves this phase available for retry without repeating effects.
     if (action == _terminalFailureDeadLetterAction) {
       await _deadLetterOrDiscard(
         delivery,
@@ -2771,27 +2794,34 @@ class Worker {
       await broker.nack(delivery, requeue: false);
     }
     if (marker is Map) {
-      final doneMeta = <String, Object?>{
-        ...status.meta,
-        _terminalFailureEnvelopeKey: {
-          'version': 1,
-          _terminalFailureLifecycleKey: _terminalFailureDone,
-          _terminalFailureActionKey:
-              marker[_terminalFailureActionKey] ??
-              _terminalFailureDeadLetterAction,
-          'envelope': envelope.toJson(),
-          if (marker['context'] is Map) 'context': marker['context'],
-        },
-      };
-      await backend.set(
-        status.id,
-        status.state,
-        payload: status.payload,
-        error: status.error,
-        attempt: status.attempt,
-        meta: doneMeta,
+      await _writeTerminalFailurePhase(
+        status,
+        marker,
+        _terminalFailureDone,
       );
     }
+  }
+
+  Future<void> _writeTerminalFailurePhase(
+    TaskStatus status,
+    Map<Object?, Object?> marker,
+    String phase,
+  ) {
+    final retainedMarker = <String, Object?>{
+      ...Map<String, Object?>.from(marker),
+      _terminalFailureLifecycleKey: phase,
+    };
+    return backend.set(
+      status.id,
+      status.state,
+      payload: status.payload,
+      error: status.error,
+      attempt: status.attempt,
+      meta: {
+        ...status.meta,
+        _terminalFailureEnvelopeKey: retainedMarker,
+      },
+    );
   }
 
   /// Handles explicit retry requests surfaced from task handlers.
