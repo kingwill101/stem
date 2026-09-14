@@ -11,6 +11,30 @@ output sizes, and thumbnails you can inspect. Processing uses core task isolates
 not the UI isolate. Photo processing has no artificial sleeps or personal-photo permissions,
 custom worker messages, or manually coordinated worker database handles.
 
+## Demo gallery
+
+Run `flutter run -t lib/demos_main.dart` for a landing page with one button
+per demo. Each demo owns its `WorkflowHost` and submits workflows with typed
+input, awaiting `run.result` on the current screen.
+
+- **Greeter** (`lib/greeting_main.dart` also runs it standalone,
+  `lib/src/greeting_workflow.dart`, `lib/src/greeting_page.dart`): type a
+  name, tap **Greet me**, and the screen shows the workflow's result. The
+  `greet` checkpoint runs inside `Isolate.run`, so the returned string names
+  both the UI isolate and the worker isolate that computed it.
+  `test/greeting_page_test.dart` drives the same flow with a widget test.
+- **Mini Medusa: cart checkout** (`lib/src/cart/`): a Medusa-style commerce
+  flow. `cart.checkout` chains `validate-cart`, `reserve-inventory`,
+  `charge-payment`, and fulfillment checkpoints with registered compensation
+  handlers (`release-reservation` restocks, `refund-payment` voids the
+  charge). The pack/ship step implementations are shared with
+  `cart.fulfill-order`, so fulfillment runs inline in checkout or standalone
+  from the **Run fulfillment workflow alone** button — the Stem analogue of
+  Medusa's nested workflows. Toggle **Decline card** or **Empty stock** to
+  watch rollback, then read the step and compensation logs.
+  `test/cart_page_test.dart` covers the happy path and the declined-card
+  rollback.
+
 ## Tasks and workflows
 
 The bottom navigation switches between Tasks, Workflows, and Workers. Switching
