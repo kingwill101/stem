@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:stem/stem.dart';
@@ -6,7 +9,8 @@ import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_routing_parity_example/routing_demo.dart';
 
 Future<void> main() async {
-  final redisUrl = Platform.environment['ROUTING_DEMO_REDIS_URL'] ??
+  final redisUrl =
+      Platform.environment['ROUTING_DEMO_REDIS_URL'] ??
       'redis://localhost:6379/0';
 
   final routing = buildRoutingRegistry();

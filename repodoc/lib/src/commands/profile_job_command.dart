@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'package:artisanal/args.dart';
 
 import '../infrastructure/process_runner.dart';
@@ -58,9 +61,8 @@ final class ProfileJobCommand extends Command<int> {
       args.addAll(['--output', output]);
     }
     if (argResults?['json'] == true) args.add('--json');
-    await ProcessRunner(
-      environment: catalog.processEnvironment,
-    ).run('dart', args, workingDirectory: root, label: 'AOT job profile');
+    await ProcessRunner(environment: catalog.processEnvironment)
+        .run('dart', args, workingDirectory: root, label: 'AOT job profile');
     return 0;
   }
 

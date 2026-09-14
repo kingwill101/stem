@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -56,8 +59,9 @@ Future<void> main(List<String> args) async {
       );
     });
 
-  final handler =
-      const Pipeline().addMiddleware(logRequests()).addHandler(router.call);
+  final handler = const Pipeline()
+      .addMiddleware(logRequests())
+      .addHandler(router.call);
 
   final port = int.tryParse(Platform.environment['PORT'] ?? '8083') ?? 8083;
   final server = await serve(handler, InternetAddress.anyIPv4, port);
@@ -81,5 +85,4 @@ Future<void> main(List<String> args) async {
 FutureOr<Object?> _placeholderEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    'noop';
+) => 'noop';

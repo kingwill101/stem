@@ -1,15 +1,22 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/stem_event.dart';
 
 /// Signature for signal handlers.
-typedef SignalHandler<T extends StemEvent> =
-    FutureOr<void> Function(T payload, SignalContext context);
+typedef SignalHandler<T extends StemEvent> = FutureOr<void> Function(
+  T payload,
+  SignalContext context,
+);
 
 /// Predicate used to filter signal payloads.
-typedef SignalPredicate<T extends StemEvent> =
-    bool Function(T payload, SignalContext context);
+typedef SignalPredicate<T extends StemEvent> = bool Function(
+  T payload,
+  SignalContext context,
+);
 
 /// Context passed to every signal dispatch.
 class SignalContext {

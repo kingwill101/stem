@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:stem/stem.dart';
@@ -7,7 +10,8 @@ import 'package:stem_dlq_sandbox/shared.dart';
 Future<void> main() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6382/0';
-  final backendUrl = Platform.environment['STEM_RESULT_BACKEND_URL'] ??
+  final backendUrl =
+      Platform.environment['STEM_RESULT_BACKEND_URL'] ??
       'redis://localhost:6382/1';
 
   stdout.writeln('[producer] connecting broker=$brokerUrl backend=$backendUrl');
@@ -26,7 +30,8 @@ Future<void> main() async {
   );
 
   stdout.writeln(
-      '[producer] enqueueing invoices $invoices (all expected to fail first)');
+    '[producer] enqueueing invoices $invoices (all expected to fail first)',
+  );
   // #region dlq-producer-enqueue
   for (final invoice in invoices) {
     final id = await client.enqueue(

@@ -90,8 +90,10 @@ routes:
   and workers subscribe by listing the channel under `STEM_WORKER_BROADCASTS`
   or via the CLI `--broadcast` flag.
 - Broadcast deliveries reuse the same envelope payload; brokers set
-  `RoutingInfo.broadcastChannel` to the logical channel and ensure each
-  subscriber receives the message exactly once when acked.
+  `RoutingInfo.broadcastChannel` to the logical channel. Eligible subscribers
+  receive separate deliveries, but lease expiry or acknowledgement uncertainty
+  can still cause redelivery. Make each subscriber's effects idempotent; fan-out
+  does not provide exactly-once execution.
 
 ## Loading subscriptions
 

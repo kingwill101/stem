@@ -5,99 +5,44 @@ sidebar_position: 11
 slug: /getting-started/monitoring
 ---
 
-This guide focuses on visibility: dashboards, metrics, and signals that help
-catch issues early.
+Monitor Stem as a distributed, at-least-once system. Metrics and signals are
+telemetry, not exactly-once accounting or business truth.
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+## Symptom → check → remedy
 
-## Dashboard deployment
+| Symptom | Check | Remedy |
+| --- | --- | --- |
+| Queue depth or enqueue-to-start latency rises | Worker heartbeat, concurrency, routing, and broker latency | Restore workers, correct routing, or add capacity; do not blindly increase retries |
+| Retry rate rises | `task-retry` payloads, downstream errors, and retry policy | Repair the dependency or bound/reduce retries |
+| DLQ volume rises | Sample entries, error class, and payload/schema version | Fix handler/deployment compatibility, then replay selected entries |
+| Heartbeats stop | Process health, namespace, broker connectivity, and heartbeat interval | Replace the worker after checking for in-flight work |
+| Scheduler drift or missed runs | Schedule store, lock ownership, and broker publish errors | Repair the store/lock path and reconcile schedules |
 
-- **Local**: run the dashboard on a developer workstation for quick checks.
-- **Internal**: deploy behind an auth proxy (SSO, basic auth, or IP allowlist).
-- **Shared ops**: place behind a reverse proxy with TLS termination and strict
-  access controls.
+## Metrics, logs, and signals
 
-Restrict control actions to operators and ensure TLS is terminated at the proxy
-or upstream load balancer.
+Configure `ObservabilityConfig` and `StemMetrics` in application code. Supported
+environment names include `STEM_METRIC_EXPORTERS`, `STEM_OTLP_ENDPOINT`,
+`STEM_HEARTBEAT_INTERVAL`, `STEM_WORKER_NAMESPACE`, `STEM_SIGNALS_ENABLED`, and
+`STEM_SIGNALS_DISABLED`. Exporters are not automatic integrations.
 
-See the [Dashboard](../core-concepts/dashboard.md) guide for setup details.
-
-## Key indicators
-
-- **Queue depth**: growing queues indicate stalled workers or upstream spikes.
-- **Queue latency**: long gaps between enqueue time and start time point to
-  saturation or routing issues.
-- **Retry rate**: a rise in retries usually signals transient dependency issues.
-- **DLQ volume**: poison pills or schema mismatches show up here.
-- **Worker heartbeats**: missing heartbeats point to crashed or partitioned
-  workers.
-- **Scheduler drift**: drift spikes indicate schedule store or broker delays.
-
-## Signals & metrics
-
-- Use lifecycle signals to emit structured events early.
-- Export metrics to your standard stack (OTLP, Prometheus, Datadog, etc.).
-- Correlate task IDs with traces/logs.
-
-<Tabs>
-<TabItem value="metrics" label="Metrics Exporters">
-
-```dart title="lib/observability.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-metrics
-
-```
-
-</TabItem>
-<TabItem value="signals" label="Signal Hooks">
-
-```dart title="lib/observability.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-signals
-
-```
-
-</TabItem>
-<TabItem value="queue-depth" label="Queue Depth Gauge">
-
-```dart title="lib/observability.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-queue-depth
-
-```
-
-</TabItem>
-<TabItem value="env" label="Env Vars">
-
-```bash
-export STEM_METRIC_EXPORTERS=otlp:http://localhost:4318/v1/metrics
-export STEM_OTLP_ENDPOINT=http://localhost:4318
-```
-
-</TabItem>
-</Tabs>
+Subscribe to `StemSignals.taskRetry`, `taskSucceeded`, and `taskFailed`, and
+include task ID, task name, queue, and run ID in application logs. Signals are
+in-process notifications and can be lost on crash; persist audit data
+separately.
 
 ## CLI probes
 
-<Tabs>
-<TabItem value="cli" label="CLI Commands">
+The optional `stem_cli` package exposes inspection commands through an
+adapter-backed application context:
 
 ```bash
+stem observe metrics
 stem observe queues
 stem observe workers
-stem observe schedules
-stem worker stats --json
+stem worker stats
 ```
 
-Set `STEM_SCHEDULE_STORE_URL` before running `stem observe schedules`.
-
-</TabItem>
-<TabItem value="dart" label="Dart (Heartbeats)">
-
-```dart title="lib/observability_ops.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-heartbeats
-
-```
-
-</TabItem>
-</Tabs>
-
-## Next steps
-
-- [Observability & Ops](./observability-and-ops.md)
-- [Dashboard](../core-concepts/dashboard.md)
-- [Worker Control CLI](../workers/worker-control.md)
+Run `stem <command> --help` for flags in the installed version. Protect
+mutating control commands and dashboards with normal operator authentication
+and TLS. See [Observe & Operate](./observability-and-ops.md) and
+[CLI control](../core-concepts/cli-control.md).

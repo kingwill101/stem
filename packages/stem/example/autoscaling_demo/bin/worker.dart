@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:io';
 
@@ -30,10 +33,14 @@ Future<void> main() async {
     ),
     idlePeriod: _parseDuration('AUTOSCALE_IDLE_MS', fallbackMs: 4000),
     tick: _parseDuration('AUTOSCALE_TICK_MS', fallbackMs: 1000),
-    scaleUpCooldown:
-        _parseDuration('AUTOSCALE_UP_COOLDOWN_MS', fallbackMs: 2000),
-    scaleDownCooldown:
-        _parseDuration('AUTOSCALE_DOWN_COOLDOWN_MS', fallbackMs: 3000),
+    scaleUpCooldown: _parseDuration(
+      'AUTOSCALE_UP_COOLDOWN_MS',
+      fallbackMs: 2000,
+    ),
+    scaleDownCooldown: _parseDuration(
+      'AUTOSCALE_DOWN_COOLDOWN_MS',
+      fallbackMs: 3000,
+    ),
   );
 
   stdout.writeln(

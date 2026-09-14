@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Declarative workflow definitions and builders.
 ///
 /// This library provides the [WorkflowDefinition] class, which is used to
@@ -68,8 +71,9 @@ import 'package:stem/src/workflow/workflow.dart' show Flow;
 import 'package:stem/stem.dart' show Flow;
 
 /// Declarative workflow definition built via [FlowBuilder].
-typedef WorkflowScriptBody<T extends Object?> =
-    FutureOr<T> Function(WorkflowScriptContext context);
+typedef WorkflowScriptBody<T extends Object?> = FutureOr<T> Function(
+  WorkflowScriptContext context,
+);
 
 /// Identifies whether a workflow is step-based or script-based.
 enum WorkflowDefinitionKind {

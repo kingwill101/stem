@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:io';
 
@@ -57,9 +60,9 @@ class ProgressTask extends TaskHandler<String> {
 
   @override
   TaskMetadata get metadata => const TaskMetadata(
-        description: 'Task that reports progress and heartbeats on a loop.',
-        tags: ['progress', 'heartbeat'],
-      );
+    description: 'Task that reports progress and heartbeats on a loop.',
+    tags: ['progress', 'heartbeat'],
+  );
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {

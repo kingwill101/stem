@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:stem/stem.dart';
@@ -7,7 +10,8 @@ import 'package:stem_rate_limit_delay_demo/shared.dart';
 Future<void> main() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6381/0';
-  final backendUrl = Platform.environment['STEM_RESULT_BACKEND_URL'] ??
+  final backendUrl =
+      Platform.environment['STEM_RESULT_BACKEND_URL'] ??
       'redis://localhost:6381/1';
 
   stdout.writeln('[producer] connecting broker=$brokerUrl backend=$backendUrl');

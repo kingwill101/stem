@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
@@ -93,9 +96,8 @@ final class PackageTestCommand extends Command<int> {
         Platform.environment,
       ))['STEM_CLI_RUN_MULTI'] = 'true';
     }
-    final resolvedEnvironment = await TestOrchestrator(
-      catalog,
-    ).resolveDependencies(environment: environment);
+    final resolvedEnvironment = await TestOrchestrator(catalog)
+        .resolveDependencies(environment: environment);
     await ProcessRunner(environment: catalog.processEnvironment).run(
       'dart',
       ['test', '--fail-fast'],

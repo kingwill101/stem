@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:io';
 
@@ -37,13 +40,15 @@ SqlitePaths resolveDatabasePaths() {
     prefix = '${base}task_context_mixed';
   } else {
     final lastSeparator = base.lastIndexOf(separator);
-    final fileName =
-        lastSeparator == -1 ? base : base.substring(lastSeparator + 1);
+    final fileName = lastSeparator == -1
+        ? base
+        : base.substring(lastSeparator + 1);
     final dotIndex = fileName.lastIndexOf('.');
     if (dotIndex > 0) {
       final trimmed = fileName.substring(0, dotIndex);
-      final dir =
-          lastSeparator == -1 ? '' : base.substring(0, lastSeparator + 1);
+      final dir = lastSeparator == -1
+          ? ''
+          : base.substring(0, lastSeparator + 1);
       prefix = '$dir$trimmed';
     } else {
       prefix = base;
@@ -103,62 +108,62 @@ final linkErrorDefinition = TaskDefinition<Map<String, Object?>, void>(
 );
 
 List<TaskHandler<Object?>> buildTasks() => [
-      InlineCoordinatorTask(),
-      FunctionTaskHandler<void>.inline(
-        name: 'demo.inline_entrypoint',
-        entrypoint: inlineEntrypoint,
-        options: const TaskOptions(queue: mixedQueue),
-        metadata: const TaskMetadata(
-          description: 'Inline TaskInvocationContext entrypoint.',
-          tags: ['task-context', 'inline'],
-        ),
+  InlineCoordinatorTask(),
+  FunctionTaskHandler<void>.inline(
+    name: 'demo.inline_entrypoint',
+    entrypoint: inlineEntrypoint,
+    options: const TaskOptions(queue: mixedQueue),
+    metadata: const TaskMetadata(
+      description: 'Inline TaskInvocationContext entrypoint.',
+      tags: ['task-context', 'inline'],
+    ),
+  ),
+  FunctionTaskHandler<Object?>(
+    name: 'demo.isolate_child',
+    entrypoint: isolateChildEntrypoint,
+    options: const TaskOptions(queue: mixedQueue),
+    metadata: const TaskMetadata(
+      description: 'Isolate entrypoint that spawns typed calls.',
+      tags: ['task-context', 'isolate'],
+    ),
+  ),
+  FunctionTaskHandler<Object?>(
+    name: 'demo.flaky',
+    entrypoint: flakyEntrypoint,
+    options: const TaskOptions(
+      queue: mixedQueue,
+      maxRetries: 2,
+      retryPolicy: TaskRetryPolicy(
+        backoff: true,
+        backoffMax: Duration(seconds: 5),
+        defaultDelay: Duration(milliseconds: 150),
+        jitter: true,
       ),
-      FunctionTaskHandler<Object?>(
-        name: 'demo.isolate_child',
-        entrypoint: isolateChildEntrypoint,
-        options: const TaskOptions(queue: mixedQueue),
-        metadata: const TaskMetadata(
-          description: 'Isolate entrypoint that spawns typed calls.',
-          tags: ['task-context', 'isolate'],
-        ),
-      ),
-      FunctionTaskHandler<Object?>(
-        name: 'demo.flaky',
-        entrypoint: flakyEntrypoint,
-        options: const TaskOptions(
-          queue: mixedQueue,
-          maxRetries: 2,
-          retryPolicy: TaskRetryPolicy(
-            backoff: true,
-            backoffMax: Duration(seconds: 5),
-            defaultDelay: Duration(milliseconds: 150),
-            jitter: true,
-          ),
-        ),
-        metadata: const TaskMetadata(
-          description: 'Demonstrates TaskInvocationContext.retry overrides.',
-          tags: ['task-context', 'retry'],
-        ),
-      ),
-      FunctionTaskHandler<void>.inline(
-        name: auditDefinition.name,
-        entrypoint: auditEntrypoint,
-        options: auditDefinition.defaultOptions,
-        metadata: auditDefinition.metadata,
-      ),
-      FunctionTaskHandler<void>.inline(
-        name: linkSuccessDefinition.name,
-        entrypoint: linkSuccessEntrypoint,
-        options: linkSuccessDefinition.defaultOptions,
-        metadata: linkSuccessDefinition.metadata,
-      ),
-      FunctionTaskHandler<void>.inline(
-        name: linkErrorDefinition.name,
-        entrypoint: linkErrorEntrypoint,
-        options: linkErrorDefinition.defaultOptions,
-        metadata: linkErrorDefinition.metadata,
-      ),
-    ];
+    ),
+    metadata: const TaskMetadata(
+      description: 'Demonstrates TaskInvocationContext.retry overrides.',
+      tags: ['task-context', 'retry'],
+    ),
+  ),
+  FunctionTaskHandler<void>.inline(
+    name: auditDefinition.name,
+    entrypoint: auditEntrypoint,
+    options: auditDefinition.defaultOptions,
+    metadata: auditDefinition.metadata,
+  ),
+  FunctionTaskHandler<void>.inline(
+    name: linkSuccessDefinition.name,
+    entrypoint: linkSuccessEntrypoint,
+    options: linkSuccessDefinition.defaultOptions,
+    metadata: linkSuccessDefinition.metadata,
+  ),
+  FunctionTaskHandler<void>.inline(
+    name: linkErrorDefinition.name,
+    entrypoint: linkErrorEntrypoint,
+    options: linkErrorDefinition.defaultOptions,
+    metadata: linkErrorDefinition.metadata,
+  ),
+];
 
 class InlineCoordinatorTask extends TaskHandler<void> {
   @override
@@ -166,27 +171,27 @@ class InlineCoordinatorTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        queue: mixedQueue,
-        maxRetries: 1,
-        rateLimit: const RateLimit.perMinute(30),
-        priority: 3,
-        retryPolicy: TaskRetryPolicy(
-          backoff: true,
-          defaultDelay: Duration(milliseconds: 250),
-          jitter: true,
-        ),
-      );
+    queue: mixedQueue,
+    maxRetries: 1,
+    rateLimit: const RateLimit.perMinute(30),
+    priority: 3,
+    retryPolicy: TaskRetryPolicy(
+      backoff: true,
+      defaultDelay: Duration(milliseconds: 250),
+      jitter: true,
+    ),
+  );
 
   @override
   TaskMetadata get metadata => const TaskMetadata(
-        description:
-            'Inline TaskContext entrypoint that enqueues nested tasks.',
-        tags: ['task-context', 'inline'],
-      );
+    description: 'Inline TaskContext entrypoint that enqueues nested tasks.',
+    tags: ['task-context', 'inline'],
+  );
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final runId = (args['runId'] as String?) ??
+    final runId =
+        (args['runId'] as String?) ??
         DateTime.now().millisecondsSinceEpoch.toString();
     final forceFail = args['forceFail'] as bool? ?? false;
 

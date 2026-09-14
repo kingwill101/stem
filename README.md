@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <strong>Experimental Dart-native background job platform</strong><br>
-  Queues, retries, scheduling, workflows, and observability — all in pure Dart.
+  <strong>Background jobs and durable workflows for Dart</strong><br>
+  Define work in Dart. Run it locally, in Flutter, or in a server worker.
 </p>
 
 <p align="center">
@@ -17,146 +17,112 @@
 
 ## Why Stem?
 
-- **Pure Dart** — No external worker processes, no FFI bindings. Runs anywhere Dart runs.
-- **Pluggable backends** — Swap between SQLite, Redis, or Postgres with a single line.
-- **Reliability patterns under active validation** — Retries with backoff, rate limiting, dead-letter queues, and priority scheduling.
-- **Workflows** — Durable, checkpointed execution for complex multi-step processes.
-- **Canvas API** — Compose tasks into groups, chains, and chords.
-- **Observability** — Built-in OpenTelemetry integration for traces and metrics.
+Use Stem when work should run outside a request, retry after failure, or wait
+between steps without keeping a Dart function alive.
+
+- **Background tasks** — Typed inputs and results, retries, queues, and schedules.
+- **Workflows** — Named checkpoints, durable waits, and retry/compensation policies.
+- **Storage choices** — Start in memory; add SQLite, Redis, or PostgreSQL when
+  you need persistence. Each adapter has its own platform and deployment requirements.
+- **Operations** — Inspect work through the CLI, signals, and OpenTelemetry.
+
+Stem is **experimental and pre-1.0**. Test your application's failure and recovery
+paths before production use. Native adapters and isolate workers are not available
+on every platform; see the [portable runtime guide](packages/stem/doc/portable-runtime.md).
+
+## Start with your use case
+
+| I want to… | Start here |
+| --- | --- |
+| Try a workflow without a database or code generation | [First workflow](#quick-start) below |
+| Send typed background tasks to workers | [Generated tasks](packages/stem_builder/README.md) |
+| Resume work after a process restart | [Persistent workflow hosts](packages/stem/doc/workflow_host.md#persistent-restart) |
+| Show workflow progress in Flutter | [Flutter host bindings](packages/stem_flutter/README.md) |
+| Store Flutter work locally | [Flutter SQLite setup](packages/stem_flutter_sqlite/README.md) |
+| Choose storage and deployment options | [Backend guide](.site/docs/getting-started/choosing-a-backend.md) |
+| Understand the runtime one concept at a time | [Documentation](https://kingwill101.github.io/stem/) |
 
 ---
 
 ## Quick Start
 
-### Recommended: generated typed tasks
+This checkout targets **Dart 3.13+**. Repository docs describe the source on this
+branch; published versions can lag behind it. When using pub.dev, check the
+documentation and SDK requirements for the version you resolve.
 
-For application code, define task arguments and results as Dart types and let
-`stem_builder` generate the transport adapter, codecs, registry and typed call
-object:
+Create a console application and add Stem:
 
-```dart
-part 'tasks.stem.g.dart';
-
-@TaskDefn(name: 'email.send')
-Future<EmailResult> sendEmail(
-  EmailArgs args, {
-  TaskExecutionContext? context,
-}) async {
-  return EmailResult(await deliver(args));
-}
+```bash
+dart create -t console stem_demo
+cd stem_demo
+dart pub add stem
 ```
 
-Run `dart run build_runner build`, then enqueue through the generated
-definition rather than a raw task-name string. See the
-[`stem_builder` guide](./packages/stem_builder/README.md) for the complete DTO and
-workflow example.
-
-### Advanced: raw task handlers
-
-For production-shaped task code, prefer `stem_builder` generated task definitions:
-they keep task arguments and results typed across the enqueue/handler boundary.
-The raw `TaskHandler` example below is intentionally the low-level
-interoperability path for dynamic task names and existing map-based handlers.
+With a Stem version that includes `WorkflowHost`, replace `bin/stem_demo.dart`
+with this complete example:
 
 ```dart
-import 'dart:async';
+import 'package:stem/stem.dart';
 
-import 'package:stem/advanced.dart';
-
-class EmailTask extends TaskHandler<String> {
-  @override
-  String get name => 'email.send';
-
-  @override
-  Future<String> call(TaskContext ctx, Map<String, Object?> args) async {
-    final to = args['to'] as String;
-    return 'sent to $to';
-  }
-}
+final greeting = HostedWorkflow<String, String>(
+  name: 'greeting',
+  run: (context, name) async {
+    final cleaned = await context.step('normalize', () => name.trim());
+    return 'Hello, $cleaned!';
+  },
+);
 
 Future<void> main() async {
-  final client = await StemClient.inMemory(tasks: [EmailTask()]);
-  final worker = await client.createWorker();
-  unawaited(worker.start());
-
-  final taskId = await client.stem.enqueue(
-    'email.send',
-    args: {'to': 'hello@example.com'},
-  );
-  final result = await client.stem.waitForTask<String>(taskId);
-  print('Result: ${result?.value}');
-
-  await worker.shutdown();
-  await client.close();
+  final host = await WorkflowHost.inMemory(workflows: [greeting]);
+  try {
+    final run = await host.submit(greeting, ' Ada ');
+    print(await run.result);
+  } finally {
+    await host.close();
+  }
 }
 ```
+
+Run `dart run`. Expected output: `Hello, Ada!`.
+
+The host starts and owns its runtime and worker. `context.step` saves a named
+checkpoint, and `run.result` waits for the typed result. The step body runs
+locally in the workflow execution; it is not a separately queued remote task.
+
+**This example is process-local.** In-memory checkpoints disappear when the
+process exits. To make runs survive a restart, configure durable storage,
+re-register the workflow definitions, and retain run IDs. Follow the
+[workflow host guide](packages/stem/doc/workflow_host.md) for that next step.
+
+For independent background jobs rather than multi-step orchestration, start
+with [generated typed tasks](packages/stem_builder/README.md). For a typed
+task without code generation, see the [core package example](packages/stem/README.md).
 
 ---
 
 ## Architecture
 
+Define work in Dart. Stem queues it, runs it in workers, and makes task results
+and workflow state available to your application.
+
+```mermaid
+flowchart TB
+    accTitle: How Stem runs background work
+    accDescr: Your application submits tasks, workflows, or scheduled jobs. A work queue delivers them to Stem workers, which execute the work and record results and workflow state.
+
+    app["Your Dart or Flutter app"]
+    work["Tasks, workflows, and schedules"]
+    queue["Work queue"]
+    workers["Stem workers"]
+    results[("Results and workflow state")]
+
+    app --> work --> queue --> workers --> results
 ```
-                               PRODUCERS
-            ┌───────────────────┬───────────────────┬──────────────────┐
-            │                   │                   │                  │
-            v                   v                   v                  v
-       ┌─────────┐        ┌──────────┐        ┌───────────┐        ┌──────────┐
-       │  Stem   │        │  Canvas  │        │ Workflow  │        │  Client  │
-       │ Client  │        │ (chains, │        │   API     │        │  SDKs    │
-       └────┬────┘        │ groups)  │        └─────┬─────┘        └────┬─────┘
-            │             └────┬─────┘              │                    │
-            └──────────────────┼────────────────────┼────────────────────┘
-                               │
-                               v
-        ┌──────────────────────────────────────────────────────────┐
-        │                         BROKER                           │
-        │ queues / leases / acks / nack / delayed / dlq             │
-        └───────────────┬───────────────────────────┬──────────────┘
-                        │                           │
-                        v                           v
-               ┌──────────────────┐         ┌─────────────────────┐
-               │  Workflow Engine │         │       Workers       │
-               │  claim runs &    │         │  (many, independent)│
-               │  schedule steps  │         └───────┬───────┬─────┘
-               └───────┬──────────┘                 │       │
-                       │                            │       │
-            enqueue steps ──────────────────────────┘       │
-                       │                                    │
-                       v                                    v
-            ┌──────────────────┐                  ┌──────────────────┐
-            │  Workflow Store  │                  │  Task Registry   │
-            │  (runs/steps)    │                  │   & Handlers     │
-            └────────┬─────────┘                  └────────┬─────────┘
-                     │                                     │
-                     v                                     v
-            ┌──────────────────┐                  ┌──────────────────┐
-            │    Event Bus     │                  │  Result Backend  │
-            └──────────────────┘                  └──────────────────┘
 
-        ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-
-                              SCHEDULING
-
-            ┌────────────────┐     ┌────────────────┐
-            │ Beat Scheduler │---->│ Schedule Store │
-            │     (cron)     │     └────────────────┘
-            └───────┬────────┘             │
-                    │                      │
-                    v                      v
-                 ┌────────┐          ┌────────────┐
-                 │ Broker │<---------│ Lock Store │
-                 └────────┘          └────────────┘
-            (enqueues scheduled tasks / lease guards)
-
-       ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-
-                             ADAPTERS
-
-         ┌────────────┐   ┌────────────┐   ┌────────────┐
-         │   SQLite   │   │   Redis    │   │  Postgres  │
-         │  (local)   │   │ (streams)  │   │ (durable)  │
-         └────────────┘   └────────────┘   └────────────┘
-```
+Choose **in-memory, SQLite, Redis, or PostgreSQL** adapters for the queue and
+stores. Capabilities vary by adapter; in-memory state is process-local.
+See the [workflow host guide](./packages/stem/doc/workflow_host.md) for
+checkpointing, retries, compensation, and recovery.
 
 ---
 
@@ -167,10 +133,10 @@ Future<void> main() async {
 | [`stem`](./packages/stem) | Core runtime: contracts, worker, scheduler, in-memory adapters, signals, Canvas, workflows | [![pub](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem) |
 | [`stem_cli`](./packages/stem_cli) | Command-line tooling (`stem` executable) and CLI utilities | [![pub](https://img.shields.io/pub/v/stem_cli.svg)](https://pub.dev/packages/stem_cli) |
 | [`stem_memory`](./packages/stem_memory) | Compatibility package for the explicit `package:stem/memory.dart` in-memory library | [![pub](https://img.shields.io/pub/v/stem_memory.svg)](https://pub.dev/packages/stem_memory) |
-| [`stem_sqlite`](./packages/stem_sqlite) | SQLite broker and result backend for local dev/testing | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
+| [`stem_sqlite`](./packages/stem_sqlite) | SQLite queue, results, and workflow storage for local persistence | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
 | [`stem_redis`](./packages/stem_redis) | Redis Streams broker, result backend, and watchdog helpers | [![pub](https://img.shields.io/pub/v/stem_redis.svg)](https://pub.dev/packages/stem_redis) |
 | [`stem_postgres`](./packages/stem_postgres) | Postgres broker, result backend, and scheduler stores | [![pub](https://img.shields.io/pub/v/stem_postgres.svg)](https://pub.dev/packages/stem_postgres) |
-| [`stem_flutter`](./packages/stem_flutter) | Flutter bootstrap for standard Stem applications | [![pub](https://img.shields.io/pub/v/stem_flutter.svg)](https://pub.dev/packages/stem_flutter) |
+| [`stem_flutter`](./packages/stem_flutter) | Flutter bootstrap, workflow host lifecycle, and progress widgets | [![pub](https://img.shields.io/pub/v/stem_flutter.svg)](https://pub.dev/packages/stem_flutter) |
 | [`stem_flutter_sqlite`](./packages/stem_flutter_sqlite) | Managed SQLite storage and Ormed setup for Flutter Stem apps | [![pub](https://img.shields.io/pub/v/stem_flutter_sqlite.svg)](https://pub.dev/packages/stem_flutter_sqlite) |
 | [`stem_builder`](./packages/stem_builder) | Build-time code generator for annotated tasks and workflows | [![pub](https://img.shields.io/pub/v/stem_builder.svg)](https://pub.dev/packages/stem_builder) |
 | [`stem_adapter_tests`](./packages/stem_adapter_tests) | Shared contract test suites for adapter implementations | [![pub](https://img.shields.io/pub/v/stem_adapter_tests.svg)](https://pub.dev/packages/stem_adapter_tests) |
@@ -178,96 +144,46 @@ Future<void> main() async {
 
 ---
 
-## Features
+## Learn the next piece
 
-### Task Options
+| Topic | Guide |
+| --- | --- |
+| Task definitions, arguments, and results | [Typed tasks and code generation](packages/stem_builder/README.md) |
+| Parallel and sequential task composition | [Canvas](.site/docs/core-concepts/canvas.md) |
+| Delayed and recurring jobs | [Scheduling](.site/docs/scheduler/beat-guide.md) |
+| Workflow sleeps, events, retries, and compensation | [Workflow hosts](packages/stem/doc/workflow_host.md) |
+| Inspecting workers, schedules, and failed deliveries | [CLI setup and commands](packages/stem_cli/README.md) |
+| Deployment and failure handling | [Production checklist](.site/docs/getting-started/production-checklist.md) |
 
-```dart
-TaskOptions(
-  queue: 'high-priority',      // Target queue
-  maxRetries: 5,               // Retry on failure
-  priority: 10,                // Higher = processed first
-  rateLimit: RateLimit.perMinute(100), // Typed rate limiting
-  softTimeLimit: Duration(seconds: 30),
-  hardTimeLimit: Duration(minutes: 2),
-  visibilityTimeout: Duration(minutes: 5),
-)
-```
+### Reliability rules to know early
 
-### Canvas — Task Composition
+- **Execution can repeat.** Use idempotency keys for external side effects.
+  Checkpoints do not make a payment, email, or HTTP request exactly-once.
+- **Persistence requires persistent adapters.** Keep the queue and relevant
+  stores durable, and keep workflow names, step names, and codecs compatible
+  across deployments.
+- **Closing a host is not cancelling a run.** It stops local observation and
+  owned resources. Cancellation is explicit and does not undo external effects.
+- **Mobile execution follows OS lifecycle limits.** Flutter bindings do not
+  keep an application running after the OS suspends or terminates it.
 
-```dart
-// Chain: sequential execution, results flow forward
-await canvas.chain([
-  task('resize', args: {'file': 'img.png'}),
-  task('upload', args: {'bucket': 's3://photos'}),
-  task('notify', args: {'channel': 'slack'}),
-]);
+## AI coding assistants
 
-// Group: parallel execution
-await canvas.group([
-  task('resize', args: {'size': 'small'}),
-  task('resize', args: {'size': 'medium'}),
-  task('resize', args: {'size': 'large'}),
-]);
+Stem's package skills teach agents the supported task, workflow, code generation,
+Flutter lifecycle, and SQLite patterns. They are shipped under each package's
+`skills/` directory, not as a separate runtime dependency.
 
-// Chord: parallel tasks + callback when all complete
-await canvas.chord(
-  [task('fetch.a'), task('fetch.b'), task('fetch.c')],
-  callback: task('aggregate'),
-);
-```
-
-### Durable Workflows
-
-```dart
-final workflow = WorkflowScript('order.process', (wf) async {
-  final validated = await wf.activity('validate', args: order);
-  final charged = await wf.activity('charge', args: validated);
-  
-  await wf.sleep(Duration(hours: 24)); // Durable sleep!
-  
-  await wf.activity('ship', args: charged);
-});
-```
-
-### Cron Scheduling
-
-```dart
-final beat = BeatScheduler(
-  broker: broker,
-  scheduleStore: store,
-  entries: [
-    ScheduleEntry(
-      name: 'daily-report',
-      cron: '0 9 * * *',  // Every day at 9 AM
-      task: task('reports.generate'),
-    ),
-  ],
-);
-```
-
----
-
-## CLI
+For a dependency version that includes skills:
 
 ```bash
-# Run a worker
-stem worker --queue default --concurrency 8
-
-# Run the beat scheduler
-stem schedule list
-
-# Inspect dead-letter queue
-stem dlq list
-stem dlq retry <task-id>
-
-# List registered tasks
-stem tasks ls
-
-# Health check
-stem health
+dart run skills@ get -p stem
 ```
+
+The command lets you select the skills to install into your project's agent
+directory. Skills added in this repository are not available from older pub.dev
+releases. See [AI assistant setup](.site/docs/getting-started/ai-skills.md) for
+package selection, local development, and the distinction between shipped
+package skills and repository contributor instructions.
 
 ---
 
@@ -275,7 +191,7 @@ stem health
 
 ### Prerequisites
 
-- Dart 3.12.0+
+- Dart 3.13.0+
 - Flutter 3.47.0+ (for the local Flutter package gate)
 - Docker (for adapter integration tests)
 - Nix and devenv 2.2+ (recommended workspace environment)
@@ -361,11 +277,13 @@ Contributions are welcome! Please read the contribution guidelines before submit
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the repository's development workflow.
+
 ---
 
 ## License
 
-MIT License — see [LICENSE](./LICENSE) for details.
+MIT License — see [LICENSE](packages/stem/LICENSE) for details.
 
 ---
 

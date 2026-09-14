@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Observability and lifecycle signals for the Stem framework.
 ///
 /// This library defines the [StemSignals] registry, which contains all
@@ -38,8 +41,11 @@ import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/signals/signal.dart';
 
 /// Function signature for reporting signal errors.
-typedef SignalErrorReporter =
-    void Function(String signalName, Object error, StackTrace stackTrace);
+typedef SignalErrorReporter = void Function(
+  String signalName,
+  Object error,
+  StackTrace stackTrace,
+);
 
 /// Configuration for controlling Stem signals behavior.
 class StemSignalConfiguration {

@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:convert';
 
 import 'package:artisanal/args.dart';
@@ -54,8 +57,7 @@ class ObserveQueuesCommand extends Command<int> {
     argParser.addOption(
       'file',
       abbr: 'f',
-      help:
-          'Path to queue snapshot JSON (omit to query the live broker/backend).',
+      help: 'Path to queue snapshot JSON (omit to query the live broker/backend).',
     );
   }
 

@@ -11,11 +11,10 @@ import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Signature for task entrypoints.
-typedef TaskEntrypoint =
-    FutureOr<Object?> Function(
-      TaskInvocationContext context,
-      Map<String, Object?> args,
-    );
+typedef TaskEntrypoint = FutureOr<Object?> Function(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+);
 
 /// Context exposed to task entrypoints in a portable runtime.
 ///

@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:io';
 
@@ -18,7 +21,8 @@ Future<void> main() async {
     ),
   ];
 
-  final otlpEndpoint = Platform.environment['STEM_OTLP_ENDPOINT'] ??
+  final otlpEndpoint =
+      Platform.environment['STEM_OTLP_ENDPOINT'] ??
       'http://localhost:4318/v1/metrics';
 
   final observability = ObservabilityConfig(
@@ -31,12 +35,13 @@ Future<void> main() async {
     tasks: tasks,
   );
   final worker = await client.createWorker(
-    workerConfig: const StemWorkerConfig(
-      consumerName: 'otel-demo-worker',
-      heartbeatTransport: NoopHeartbeatTransport(),
-    ).copyWith(
-      observability: observability,
-    ),
+    workerConfig:
+        const StemWorkerConfig(
+          consumerName: 'otel-demo-worker',
+          heartbeatTransport: NoopHeartbeatTransport(),
+        ).copyWith(
+          observability: observability,
+        ),
   );
 
   await worker.start();

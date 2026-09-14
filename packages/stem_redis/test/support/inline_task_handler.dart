@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 // Public constructor names intentionally initialize private implementation
 // fields to preserve the package API.
 // ignore_for_file: prefer_initializing_formals
@@ -6,8 +9,10 @@ import 'dart:async';
 
 import 'package:stem/stem.dart';
 
-typedef InlineTaskCallback<R> =
-    FutureOr<R> Function(TaskContext context, Map<String, Object?> args);
+typedef InlineTaskCallback<R> = FutureOr<R> Function(
+  TaskContext context,
+  Map<String, Object?> args,
+);
 
 class InlineTaskHandler<R> extends TaskHandler<R> {
   InlineTaskHandler({

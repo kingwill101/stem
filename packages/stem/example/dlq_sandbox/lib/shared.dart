@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -9,16 +12,16 @@ const _queueName = 'default';
 const _taskName = 'billing.invoice.process';
 
 List<TaskHandler<Object?>> buildTasks() => [
-      FunctionTaskHandler<void>(
-        name: _taskName,
-        options: const TaskOptions(
-          queue: _queueName,
-          maxRetries: 2,
-          visibilityTimeout: Duration(seconds: 60),
-        ),
-        entrypoint: _invoiceEntrypoint,
-      ),
-    ];
+  FunctionTaskHandler<void>(
+    name: _taskName,
+    options: const TaskOptions(
+      queue: _queueName,
+      maxRetries: 2,
+      visibilityTimeout: Duration(seconds: 60),
+    ),
+    entrypoint: _invoiceEntrypoint,
+  ),
+];
 
 Future<RedisStreamsBroker> connectBroker(String uri) =>
     RedisStreamsBroker.connect(uri);
@@ -28,27 +31,35 @@ Future<RedisResultBackend> connectBackend(String uri) =>
 
 List<SignalSubscription> attachSignalLogging() {
   final subs = <SignalSubscription>[];
-  subs.add(StemSignals.taskFailed.connect((payload, _) {
-    stdout.writeln(
-      '[signal][task_failed] id=${payload.envelope.id} '
-      'attempt=${payload.attempt} reason=${payload.error}',
-    );
-  }));
-  subs.add(StemSignals.taskRevoked.connect((payload, _) {
-    stdout.writeln(
-      '[signal][task_revoked] id=${payload.envelope.id} reason=revoked',
-    );
-  }));
-  subs.add(StemSignals.taskRetry.connect((payload, _) {
-    stdout.writeln(
-      '[signal][task_retry] id=${payload.envelope.id} next=${payload.nextRetryAt.toIso8601String()}',
-    );
-  }));
-  subs.add(StemSignals.taskSucceeded.connect((payload, _) {
-    stdout.writeln(
-      '[signal][task_succeeded] id=${payload.envelope.id} payload=${jsonEncode(payload.result)}',
-    );
-  }));
+  subs.add(
+    StemSignals.taskFailed.connect((payload, _) {
+      stdout.writeln(
+        '[signal][task_failed] id=${payload.envelope.id} '
+        'attempt=${payload.attempt} reason=${payload.error}',
+      );
+    }),
+  );
+  subs.add(
+    StemSignals.taskRevoked.connect((payload, _) {
+      stdout.writeln(
+        '[signal][task_revoked] id=${payload.envelope.id} reason=revoked',
+      );
+    }),
+  );
+  subs.add(
+    StemSignals.taskRetry.connect((payload, _) {
+      stdout.writeln(
+        '[signal][task_retry] id=${payload.envelope.id} next=${payload.nextRetryAt.toIso8601String()}',
+      );
+    }),
+  );
+  subs.add(
+    StemSignals.taskSucceeded.connect((payload, _) {
+      stdout.writeln(
+        '[signal][task_succeeded] id=${payload.envelope.id} payload=${jsonEncode(payload.result)}',
+      );
+    }),
+  );
   return subs;
 }
 
@@ -72,8 +83,10 @@ FutureOr<void> _invoiceEntrypoint(
 
   context.heartbeat();
   await Future<void>.delayed(const Duration(milliseconds: 200));
-  await context
-      .progress(0.5, data: {'invoiceId': invoiceId, 'stage': 'replay'});
+  await context.progress(
+    0.5,
+    data: {'invoiceId': invoiceId, 'stage': 'replay'},
+  );
   await Future<void>.delayed(const Duration(milliseconds: 200));
   stdout.writeln('[worker][success] invoice=$invoiceId replayed successfully');
 }

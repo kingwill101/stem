@@ -1,5 +1,9 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:stem/src/core/clock.dart';
 
 /// Represents a persisted revoke entry for a task.

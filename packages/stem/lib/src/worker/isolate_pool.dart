@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Isolate pool management for concurrent task execution.
 ///
 /// This library provides a managed pool of isolates ([TaskIsolatePool]) that
@@ -67,8 +70,9 @@ import 'package:stem/src/worker/isolate_messages.dart';
 import 'package:stem/src/worker/worker.dart';
 
 /// A handler for task control signals.
-typedef TaskControlHandler =
-    FutureOr<void> Function(TaskInvocationSignal signal);
+typedef TaskControlHandler = FutureOr<void> Function(
+  TaskInvocationSignal signal,
+);
 
 /// Reason an isolate was recycled or disposed.
 enum IsolateRecycleReason {

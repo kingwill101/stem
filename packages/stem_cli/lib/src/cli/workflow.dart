@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:convert';
 
 import 'package:artisanal/args.dart';
@@ -54,8 +57,7 @@ class _WorkflowStartCommand extends Command<int> {
       )
       ..addOption(
         'max-suspend',
-        help:
-            'Auto-cancel when a suspension exceeds this duration (e.g. 30s, 5m).',
+        help: 'Auto-cancel when a suspension exceeds this duration (e.g. 30s, 5m).',
       );
   }
 

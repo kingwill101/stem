@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 // Public constructor names intentionally initialize private implementation
 // fields to preserve the package API.
 // ignore_for_file: prefer_initializing_formals
@@ -1196,17 +1199,15 @@ return 1
 
   @override
   Future<List<String>> dueRuns(DateTime now, {int limit = 256}) async {
-    final entries =
-        await _send([
-              'ZRANGEBYSCORE',
-              _dueKey(),
-              '-inf',
-              now.millisecondsSinceEpoch.toString(),
-              'LIMIT',
-              '0',
-              limit.toString(),
-            ])
-            as List?;
+    final entries = await _send([
+      'ZRANGEBYSCORE',
+      _dueKey(),
+      '-inf',
+      now.millisecondsSinceEpoch.toString(),
+      'LIMIT',
+      '0',
+      limit.toString(),
+    ]) as List?;
     if (entries == null) return const [];
     final ids = entries.cast<String>();
     if (ids.isNotEmpty) {
@@ -1217,14 +1218,12 @@ return 1
 
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
-    final ordered =
-        await _send([
-              'ZRANGE',
-              _watchersTopicKey(topic),
-              '0',
-              (limit - 1).toString(),
-            ])
-            as List?;
+    final ordered = await _send([
+      'ZRANGE',
+      _watchersTopicKey(topic),
+      '0',
+      (limit - 1).toString(),
+    ]) as List?;
     if (ordered != null && ordered.isNotEmpty) {
       return ordered.cast<String>().take(limit).toList(growable: false);
     }
@@ -1240,24 +1239,22 @@ return 1
     int limit = 256,
   }) async {
     final nowIso = _clock.now().toIso8601String();
-    final results =
-        await _send([
-              'EVAL',
-              _luaResolveWatchers,
-              '4',
-              _watchersHashKey(),
-              _dueKey(),
-              _watchersTopicKey(topic),
-              _topicKey(topic),
-              _runKeyPrefix(),
-              jsonEncode(payload),
-              topic,
-              limit.toString(),
-              nowIso,
-              WorkflowStatus.running.name,
-              WorkflowStatus.suspended.name,
-            ])
-            as List?;
+    final results = await _send([
+      'EVAL',
+      _luaResolveWatchers,
+      '4',
+      _watchersHashKey(),
+      _dueKey(),
+      _watchersTopicKey(topic),
+      _topicKey(topic),
+      _runKeyPrefix(),
+      jsonEncode(payload),
+      topic,
+      limit.toString(),
+      nowIso,
+      WorkflowStatus.running.name,
+      WorkflowStatus.suspended.name,
+    ]) as List?;
     if (results == null || results.isEmpty) {
       return const [];
     }
@@ -1284,14 +1281,12 @@ return 1
     String topic, {
     int limit = 256,
   }) async {
-    final members =
-        await _send([
-              'ZRANGE',
-              _watchersTopicKey(topic),
-              '0',
-              (limit - 1).toString(),
-            ])
-            as List?;
+    final members = await _send([
+      'ZRANGE',
+      _watchersTopicKey(topic),
+      '0',
+      (limit - 1).toString(),
+    ]) as List?;
     if (members == null || members.isEmpty) {
       return const [];
     }
@@ -1478,9 +1473,14 @@ return 1
     var cursor = '0';
     final pattern = '$namespace:wf:wf-*';
     do {
-      final result =
-          await _send(['SCAN', cursor, 'MATCH', pattern, 'COUNT', '100'])
-              as List;
+      final result = await _send([
+        'SCAN',
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        '100',
+      ]) as List;
       cursor = result[0] as String;
       final keys = (result[1] as List).cast<String>();
       for (final key in keys) {
@@ -1522,9 +1522,14 @@ return 1
     var cursor = '0';
     final pattern = '$namespace:wf:wf-*';
     do {
-      final result =
-          await _send(['SCAN', cursor, 'MATCH', pattern, 'COUNT', '100'])
-              as List;
+      final result = await _send([
+        'SCAN',
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        '100',
+      ]) as List;
       cursor = result[0] as String;
       final keys = (result[1] as List).cast<String>();
       for (final key in keys) {

@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 
 import 'package:stem/stem.dart';
@@ -10,9 +13,8 @@ import 'throughput_store.dart';
 
 /// Parses benchmark durations such as `250ms`, `5s`, `2m`, or `1h`.
 Duration parseThroughputDuration(String value) {
-  final match = RegExp(
-    r'^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h)$',
-  ).firstMatch(value.trim().toLowerCase());
+  final match = RegExp(r'^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h)$')
+      .firstMatch(value.trim().toLowerCase());
   if (match == null) {
     throw ArgumentError(
       'Invalid benchmark duration "$value". Use values such as 5s or 2m.',

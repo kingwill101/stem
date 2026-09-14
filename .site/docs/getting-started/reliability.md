@@ -107,7 +107,7 @@ default one-second floor, Stem uses the shorter safe interval instead.
   Downstream state stores that support fencing should reject writes carrying a
   token older than the last accepted token. The token prevents stale owners
   from overwriting state after a lease expires; it does not make external
-  side effects exactly once.
+  side effects exactly once; this remains at-least-once execution.
 - Monitor schedule drift and failures to detect store latency.
 - Re-apply schedules after deploys to ensure definitions stay current.
 
@@ -181,12 +181,15 @@ Automatic worker lease renewal protects normal executions; call
 
 ## Operational checks
 
+The optional `stem_cli` package can inspect the configured adapter context:
+
 ```bash
-stem health --broker "$STEM_BROKER_URL" --backend "$STEM_RESULT_BACKEND_URL"
 stem observe queues
 stem observe workers
 stem dlq list --queue <queue>
 ```
+
+Run `stem <command> --help` for the installed version's required options.
 
 ## Next steps
 

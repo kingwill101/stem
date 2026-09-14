@@ -1,9 +1,13 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:stem/stem.dart';
 import 'package:stem/memory.dart';
 import 'package:stem_redis/stem_redis.dart';
+
 import '../lib/shared.dart';
 
 Future<void> main() async {

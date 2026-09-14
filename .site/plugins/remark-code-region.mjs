@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import { readFileSync } from 'fs';
 import { dirname, resolve, isAbsolute } from 'path';
 import { visit } from 'unist-util-visit';
@@ -41,27 +44,31 @@ export default function remarkCodeRegion(options = {}) {
 
       // Resolve relative paths from the markdown file's directory
       if (!isAbsolute(filePath)) {
-        const mdFilePath = file.history[0] || file.path;
+        const mdFilePath = file.history?.[0] || file.path;
         const mdDir = dirname(mdFilePath);
         filePath = resolve(mdDir, filePath);
       }
 
+      const sourcePath = file.history?.[0] || file.path || '<markdown input>';
+
+      let content;
       try {
-        let content = readFileSync(filePath, 'utf-8');
-
-        // Extract region if specified
-        if (regionName) {
-          content = extractRegion(content, regionName);
-        }
-
-        // Remove trailing newline
-        content = content.replace(/\n$/, '');
-
-        node.value = content;
+        content = readFileSync(filePath, 'utf-8');
       } catch (err) {
-        console.error(`Failed to import code from ${filePath}: ${err.message}`);
-        node.value = `// Error importing from ${filePath}: ${err.message}`;
+        throw includeError(sourcePath, filePath, regionName, err);
       }
+
+      // Extract region if specified
+      if (regionName) {
+        try {
+          content = extractRegion(content, regionName);
+        } catch (err) {
+          throw includeError(sourcePath, filePath, regionName, err);
+        }
+      }
+
+      // Remove trailing newline
+      node.value = content.replace(/\n$/, '');
     });
   };
 }
@@ -79,46 +86,67 @@ export default function remarkCodeRegion(options = {}) {
  */
 function extractRegion(content, regionName) {
   const lines = content.split('\n');
-  const regionStartPatterns = [
-    new RegExp(`^\\s*//\\s*#region\\s+${escapeRegex(regionName)}\\s*$`),
-    new RegExp(`^\\s*//\\s*#region:\\s*${escapeRegex(regionName)}\\s*$`),
-    new RegExp(`^\\s*//\\s*region:\\s*${escapeRegex(regionName)}\\s*$`),
-  ];
-  const regionEndPatterns = [
-    new RegExp(`^\\s*//\\s*#endregion\\s+${escapeRegex(regionName)}\\s*$`),
-    new RegExp(`^\\s*//\\s*#endregion\\s*$`),
-    new RegExp(`^\\s*//\\s*endregion\\s*$`),
-  ];
-
-  let inRegion = false;
-  let startIndex = -1;
-  let endIndex = -1;
+  const stack = [];
+  let target;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-
-    if (!inRegion) {
-      if (regionStartPatterns.some((p) => p.test(line))) {
-        inRegion = true;
-        startIndex = i + 1;
+    const start = parseRegionStart(line);
+    if (start !== undefined) {
+      const entry = { name: start, startIndex: i + 1 };
+      if (!target && start === regionName) {
+        target = entry;
+        stack.push(entry);
+      } else if (target) {
+        stack.push(entry);
       }
-    } else if (regionEndPatterns.some((p) => p.test(line))) {
-      endIndex = i;
-      break;
+      continue;
+    }
+
+    const end = parseRegionEnd(line);
+    if (end === undefined || !target || stack.length === 0) continue;
+
+    const open = stack[stack.length - 1];
+    if (end !== null && open.name !== end) {
+      throw new Error(
+        `Mismatched end marker "${end}" for open region ` +
+          `"${open.name || '<anonymous>'}"`,
+      );
+    }
+    stack.pop();
+    if (open === target) {
+      return lines.slice(target.startIndex, i).join('\n');
     }
   }
 
-  if (startIndex === -1) {
+  if (!target) {
     throw new Error(`Region "${regionName}" not found`);
   }
 
-  if (endIndex === -1) {
-    endIndex = lines.length;
-  }
-
-  return lines.slice(startIndex, endIndex).join('\n');
+  const open = stack[stack.length - 1];
+  const nested =
+    open && open !== target && open.name
+      ? ` (nested region "${open.name}" is also still open)`
+      : '';
+  throw new Error(`Region "${regionName}" has no end marker${nested}`);
 }
 
-function escapeRegex(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function parseRegionStart(line) {
+  const match = line.match(/^\s*\/\/\s*(?:#region\b|region:)\s*:?\s*(.*?)\s*$/);
+  return match ? match[1] || null : undefined;
+}
+
+function parseRegionEnd(line) {
+  const match = line.match(/^\s*\/\/\s*(?:#endregion\b|endregion\b)\s*(.*?)\s*$/);
+  if (!match) return undefined;
+  return match[1] || null;
+}
+
+function includeError(sourcePath, filePath, regionName, error) {
+  const region = regionName ? `, region "${regionName}"` : '';
+  return new Error(
+    `Failed to import code include from ${sourcePath}: ` +
+      `path "${filePath}"${region}: ${error.message}`,
+    { cause: error },
+  );
 }

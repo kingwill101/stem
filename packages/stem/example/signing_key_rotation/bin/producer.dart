@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:stem/stem.dart';
@@ -26,7 +29,8 @@ Future<void> main() async {
 
   final taskCount = _parseInt('TASKS', fallback: 5, min: 1);
   // #region signing-rotation-producer-active-key
-  final keyId = config.signing.activeKeyId ??
+  final keyId =
+      config.signing.activeKeyId ??
       Platform.environment['STEM_SIGNING_ACTIVE_KEY'] ??
       'unknown';
   stdout.writeln(

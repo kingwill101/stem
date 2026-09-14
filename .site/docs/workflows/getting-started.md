@@ -3,87 +3,39 @@ title: Getting Started
 sidebar_position: 1
 ---
 
-This is the quickest path to a working durable workflow in Stem.
+```dart
+import 'package:stem/stem.dart';
 
-## 1. Create a workflow app
+final workflow = HostedWorkflow<String, String>(
+  name: 'welcome',
+  run: (context, name) async {
+    final cleaned = await context.step('normalize', () => name.trim());
+    return 'Welcome, $cleaned!';
+  },
+);
 
-```dart title="bin/workflows.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-app-create
-
+Future<void> main() async {
+  final host = await WorkflowHost.inMemory(workflows: [workflow]);
+  try {
+    final run = await host.submit(workflow, 'Ada');
+    print(await run.result);
+  } finally {
+    await host.close();
+  }
+}
 ```
 
-Pass normal task handlers through `tasks:` if the workflow also needs to
-enqueue regular Stem tasks.
+`inMemory` creates, starts, and owns the app. `submit` persists and enqueues
+one run; `result` observes it. Closing neither deletes nor cancels a run.
 
-If you need separate workflow lanes, pass `continuationQueue:` and
-`executionQueue:` into `client.createWorkflowApp(...)`. When the app is
-creating the managed worker for you, those queue names are inferred into the
-worker subscription automatically.
+For production, use `WorkflowHost.create` with a persistent app factory.
+After a restart, re-register compatible definitions and reattach with
+`host.observe(workflow, savedRunId)`; this does not submit another execution.
+`recover(limit: 100)` re-enqueues a bounded batch of runnable runs, and
+duplicate delivery remains possible.
 
-## 2. Start the managed worker
-
-```dart title="bin/workflows.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-app-start
-
-```
-
-`StemWorkflowApp.start()` starts both the runtime and the underlying worker.
-The managed worker subscribes to the workflow orchestration queue, so you do
-not need to manually register the internal `stem.workflow.run` task.
-
-If you prefer a minimal example, `startWorkflow(...)`,
-`startWorkflowValue(...)`, and `startWorkflowJson(...)` initialize the runtime
-on first use but never start the managed worker implicitly. Start the returned
-app explicitly when the process is intended to consume work. Use those
-name-based APIs when workflow names come from config or external input.
-For workflows you define in code, prefer direct workflow helpers or generated
-workflow refs.
-
-## 3. Start a run and wait for the result
-
-```dart title="bin/run_workflow.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-run
-
-```
-
-The returned `WorkflowResult<T>` includes:
-
-- the decoded `value`
-- the persisted `RunState`
-- a `timedOut` flag when the caller stops waiting before the run finishes
-
-## 4. Reuse existing bootstrap when needed
-
-```dart title="bin/workflows_client.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-client
-
-```
-
-Use `StemClient` when one service wants to own broker, backend, and workflow
-setup in one place. The clean path there is `client.createWorkflowApp(...)`.
-
-If your service already owns a `StemApp`, layer workflows on top of it with
-`stemApp.createWorkflowApp(...)`. That path reuses the current worker, so the
-underlying app must already subscribe to the workflow queue plus the task
-queues your workflows need.
-
-For late registration, use the app helpers instead of reaching through the
-runtime registry:
-
-- `registerWorkflow(...)` / `registerWorkflows(...)`
-- `registerFlow(...)` / `registerFlows(...)`
-- `registerScript(...)` / `registerScripts(...)`
-- `registerModule(...)` / `registerModules(...)`
-
-If you are registering raw `WorkflowDefinition` values directly, prefer
-`WorkflowDefinition.flowJson(...)` / `.scriptJson(...)` for the common DTO
-path, `WorkflowDefinition.flowVersionedJson(...)` /
-`.scriptVersionedJson(...)` when the stored result should carry an explicit
-schema version, and `WorkflowDefinition.flowCodec(...)` / `.scriptCodec(...)`
-when supplying a standard `Codec<T, Object?>` or compatible `PayloadCodec<T>`.
-See [authoring codecs](./context-and-serialization.md#authoring-codecs) for
-the shared contract.
-
-## 5. Move to the right next page
-
-- If you need a mental model first, read [Flows and Scripts](./flows-and-scripts.md).
-- If you want the decorator/codegen path, read
-  [Annotated Workflows](./annotated-workflows.md).
-- If you need to suspend and resume runs, read
-  [Suspensions and Events](./suspensions-and-events.md).
+`context.sleep(name, duration)` creates a durable timer checkpoint.
+`context.awaitEvent(name, event)` waits for a topic event emitted with
+`host.emitEvent(...)`. Events are not run-addressed or buffered before a
+watcher exists. Task delivery, replay, and external effects are at least once;
+use idempotency keys.

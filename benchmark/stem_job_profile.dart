@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -179,9 +182,8 @@ Future<_ProfileBatch> _enqueueBatch(
 }
 
 Future<List<TaskStatus>> _awaitBatch(List<Future<TaskStatus>> waiters) async {
-  final statuses = await Future.wait(
-    waiters,
-  ).timeout(const Duration(minutes: 10));
+  final statuses = await Future.wait(waiters)
+      .timeout(const Duration(minutes: 10));
   for (final status in statuses) {
     if (status.state != TaskState.succeeded) {
       throw StateError(

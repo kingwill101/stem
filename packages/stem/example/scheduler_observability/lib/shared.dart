@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:io';
 
@@ -15,12 +18,12 @@ Future<RedisResultBackend> connectBackend(String url, {TlsConfig? tls}) {
 }
 
 List<TaskHandler<Object?>> buildTasks() => [
-      FunctionTaskHandler<void>(
-        name: 'scheduler.demo',
-        options: const TaskOptions(queue: scheduleQueue),
-        entrypoint: _scheduledEntrypoint,
-      ),
-    ];
+  FunctionTaskHandler<void>(
+    name: 'scheduler.demo',
+    options: const TaskOptions(queue: scheduleQueue),
+    entrypoint: _scheduledEntrypoint,
+  ),
+];
 
 FutureOr<void> _scheduledEntrypoint(
   TaskInvocationContext context,

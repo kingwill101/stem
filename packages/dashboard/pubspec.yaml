@@ -3,7 +3,7 @@ description: Hotwire + Routed dashboard for the Stem runtime.
 version: 0.2.0
 publish_to: "none"
 environment:
-  sdk: ">=3.12.0 <4.0.0"
+  sdk: ">=3.13.0 <4.0.0"
 
 dependencies:
   intl: ^0.20.2

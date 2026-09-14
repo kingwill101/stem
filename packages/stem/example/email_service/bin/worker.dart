@@ -1,5 +1,9 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:io';
+
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'package:stem/stem.dart';
@@ -92,7 +96,7 @@ Future<String> sendEmail(
       (Platform.environment['SMTP_USE_TLS'] ?? 'false').toLowerCase() == 'true';
   final allowInsecure =
       (Platform.environment['SMTP_ALLOW_INSECURE'] ?? 'true').toLowerCase() !=
-          'false';
+      'false';
 
   final smtpServer = SmtpServer(
     host,

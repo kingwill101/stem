@@ -7,7 +7,7 @@ to the collector and Jaeger.
 
 ## Prerequisites
 
-1. Dart SDK 3.3+ (for local runs)
+1. Dart SDK 3.13+ (for local runs)
 2. Docker with Compose v2
 3. The provided OpenTelemetry collector + Jaeger UI (bundled configuration)
 

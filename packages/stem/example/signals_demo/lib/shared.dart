@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -9,22 +12,22 @@ final alwaysFailTaskDefinition = TaskDefinition.noArgs<void>(
 );
 
 List<TaskHandler<Object?>> buildTasks() => [
-      FunctionTaskHandler<String>(
-        name: 'tasks.hello',
-        entrypoint: _helloEntrypoint,
-        options: const TaskOptions(maxRetries: 0),
-      ),
-      FunctionTaskHandler<String>(
-        name: flakyTaskDefinition.name,
-        entrypoint: _flakyEntrypoint,
-        options: const TaskOptions(maxRetries: 2),
-      ),
-      FunctionTaskHandler<void>(
-        name: alwaysFailTaskDefinition.name,
-        entrypoint: _alwaysFailEntrypoint,
-        options: const TaskOptions(maxRetries: 1),
-      ),
-    ];
+  FunctionTaskHandler<String>(
+    name: 'tasks.hello',
+    entrypoint: _helloEntrypoint,
+    options: const TaskOptions(maxRetries: 0),
+  ),
+  FunctionTaskHandler<String>(
+    name: flakyTaskDefinition.name,
+    entrypoint: _flakyEntrypoint,
+    options: const TaskOptions(maxRetries: 2),
+  ),
+  FunctionTaskHandler<void>(
+    name: alwaysFailTaskDefinition.name,
+    entrypoint: _alwaysFailEntrypoint,
+    options: const TaskOptions(maxRetries: 1),
+  ),
+];
 
 List<SignalSubscription> registerSignalLogging(String label) {
   String prefix(String event) => '[signals][$label][$event]';

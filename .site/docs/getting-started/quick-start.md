@@ -5,159 +5,82 @@ sidebar_position: 2
 slug: /getting-started/quick-start
 ---
 
-Spin up Stem in minutes with nothing but Dart installed. This walkthrough stays
-fully in-memory so you can focus on the core pipeline: enqueueing, retries,
-delays, priorities, and chaining work together.
+This is the shortest hosted-workflow example. It uses only memory, so it is
+safe to run locally but deliberately does not survive a process restart.
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+This example targets the current source API and requires a Stem version that
+includes `WorkflowHost`. `dart pub add stem` resolves a published release, which
+may not include this API yet. Check that release's documentation first. To
+try the current source before publication, replace the `stem` dependency with
+a path dependency on your checkout:
 
-## 1. Create a Demo Project
+```yaml
+dependencies:
+  stem:
+    path: /absolute/path/to/stem/packages/stem
+```
+
+Run `dart pub get` after changing the dependency. Use a Dart 3.13+ SDK for the
+current source.
 
 ```bash
-dart create stem_quickstart
-cd stem_quickstart
-
-# Add Stem as a dependency and activate the CLI.
+dart create hosted_demo
+cd hosted_demo
 dart pub add stem
-dart pub global activate stem_cli
 ```
 
-Add the Dart pub cache to your `PATH` so the `stem` CLI is reachable:
+Replace `bin/hosted_demo.dart` with:
+
+```dart
+import 'package:stem/stem.dart';
+
+final greeting = HostedWorkflow<String, String>(
+  name: 'greeting',
+  run: (context, name) async {
+    final cleaned = await context.step('normalize-name', () => name.trim());
+    await context.sleep('small-pause', const Duration(milliseconds: 10));
+    return cleaned.isEmpty ? 'Hello, stranger!' : 'Hello, $cleaned!';
+  },
+);
+
+Future<void> main() async {
+  final host = await WorkflowHost.inMemory(workflows: [greeting]);
+  try {
+    final run = await host.submit(greeting, ' Ada ');
+    print('${run.id}: ${await run.result}'); // Hello, Ada!
+  } finally {
+    await host.close();
+  }
+}
+```
+
+Run it:
 
 ```bash
-export PATH="$HOME/.pub-cache/bin:$PATH"
-stem --version
+dart run
 ```
 
-## 2. Register Tasks with Options
+`submit` persists and enqueues a run, returning a typed `HostedRun`. Accessing
+`result` observes the terminal result. A timeout on result observation (if you
+configure `resultTimeout`) does **not** cancel execution; call `observe` with
+the saved ID to watch again. `cancel()` is an explicit durable cancellation
+request and does not roll back an external side effect already performed.
 
-Replace the generated `bin/stem_quickstart.dart` with the script built from the
-snippets below. The full, runnable version lives at
-`packages/stem/example/docs_snippets/lib/quick_start.dart` in the repository.
+## Important boundaries
 
-### Define task handlers
+The in-memory broker, backend, and workflow store are process-local. They are
+excellent for a demo and tests, but nothing can be recovered after a restart.
+For restart durability, follow [Choosing a backend](./choosing-a-backend.md)
+and create the host through an app factory.
 
-Each task declares its name and retry/timeout options.
+Each `context.step` callback executes in the local worker process. It is not a
+remote activity, and `host.close()` is not cancellation: owned app shutdown
+waits for admitted operations and may drain an active handler.
 
-<Tabs>
-<TabItem value="resize" label="Image resize task">
+## Continue
 
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-task-resize
-
-```
-
-</TabItem>
-<TabItem value="email" label="Email receipt task">
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-task-email
-
-```
-
-</TabItem>
-</Tabs>
-
-### Bootstrap worker + Stem
-
-Use `StemApp` to wire tasks, the in-memory broker/backend, and the worker:
-
-<Tabs>
-<TabItem value="bootstrap" label="Tasks + runtime bootstrap">
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-bootstrap
-
-```
-
-</TabItem>
-</Tabs>
-
-### Enqueue tasks
-
-Publish an immediate task plus a delayed task with custom metadata:
-
-<Tabs>
-<TabItem value="enqueue" label="Immediate + delayed enqueues">
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-enqueue
-
-```
-
-</TabItem>
-</Tabs>
-
-Run the script:
-
-```bash
-dart run bin/stem_quickstart.dart
-```
-
-Stem handles retries, time limits, rate limiting, and priority ordering even
-with the in-memory adapters—great for tests and local demos.
-
-## 3. Compose Work with Canvas
-
-Stem’s canvas API lets you chain, group, or create chords of tasks. Add this
-helper to the bottom of the file above to try a chain:
-
-<Tabs>
-<TabItem value="canvas-helper" label="Canvas chain helper">
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-canvas-example
-
-```
-
-</TabItem>
-</Tabs>
-
-Then call it from `main` once the worker has started:
-
-<Tabs>
-<TabItem value="canvas-call" label="Invoke the canvas helper">
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-canvas-call
-
-```
-
-</TabItem>
-</Tabs>
-
-Finally, inspect the result state before shutting down:
-
-<Tabs>
-<TabItem value="inspect" label="Inspect task result">
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-inspect
-
-```
-
-</TabItem>
-</Tabs>
-
-Each step records progress in the result backend, and failures trigger retries
-or DLQ placement according to `TaskOptions`.
-
-## 4. Peek at Retries and DLQ
-
-Force a failure to see retry behaviour:
-
-<Tabs>
-<TabItem value="failure" label="Simulate retry + DLQ">
-
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start_failure.dart#quickstart-email-failure
-
-```
-
-</TabItem>
-</Tabs>
-
-The retry pipeline and DLQ logic are built into the worker. When the task
-exceeds `maxRetries`, the envelope moves to the DLQ; you’ll learn how to inspect
-and replay those entries in the next guide.
-
-## 5. Where to Next
-
-- Connect Stem to Redis/Postgres, try broadcast routing, and run Beat in
-  [Connect to Infrastructure](./developer-environment.md).
-- Explore worker control commands, DLQ tooling, and OpenTelemetry export in
-  [Observe & Operate](./observability-and-ops.md).
-- Keep the script—you’ll reuse the tasks and app bootstrap in later steps.
+- Add independent queued work with [First Steps](./first-steps.md).
+- Learn the full workflow lifecycle in
+  [Workflow getting started](../workflows/getting-started.md).
+- For persistence and restart recovery, read
+  [Next Steps](./next-steps.md).

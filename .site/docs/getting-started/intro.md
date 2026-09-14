@@ -7,101 +7,59 @@ aliases:
   - /getting-started/intro
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+Stem is a Dart-native toolkit for background tasks and durable workflows. A
+task is a unit of work a worker can retry. A workflow is an orchestrated
+program whose named checkpoints and waits can be resumed from a store.
 
-Stem is an experimental Dart-native background work platform with Celery-like
-building blocks for queues, workers, and durable workflows. This onboarding
-path assumes you have never touched Stem before and walks you from “what is
-this?” to “I can evaluate a production-shaped deployment.”
+## Choose your first path
 
-## What is a task queue?
+| You need to… | Start here |
+| --- | --- |
+| Run a typed, multi-step process with `sleep` or events | [Hosted workflow quick start](./quick-start.md) |
+| Put independent jobs on a queue | [Generated task first steps](./first-steps.md) |
+| Decide between memory, Redis, Postgres, or SQLite | [Choosing a backend](./choosing-a-backend.md) |
 
-A task queue lets you push work to background workers instead of blocking your
-web or API process. The core pipeline looks like:
+The function-first API is `WorkflowHost`: define a `HostedWorkflow`, submit
+typed input, and await a `HostedRun` result. The host is an application
+facade, not a second execution engine.
 
-```
-Producer → Broker → Worker → Result Backend
-```
+## Source checkouts and published packages
 
-- **Architecture at a glance**
+The documentation site is built from this repository, while `dart pub add stem`
+resolves the latest published package. A checkout can contain APIs that are
+not in the published release yet. If an example does not resolve in a
+published app, either use the release's API documentation or depend on a
+specific source path while evaluating the checkout:
 
-![Task queue pipeline](/img/task-queue-pipeline.svg)
-
-- **Producer** enqueues a task (e.g. send email).
-- **Broker** stores and delivers tasks to workers.
-- **Worker** executes tasks and reports status.
-- **Result backend** keeps history and outputs.
-
-In Stem, you can mix and match brokers and backends (for example, Redis for
-fast delivery and Postgres for durable results).
-
-## A minimal Stem pipeline
-
-The core objects are a task handler, a worker, and a producer. This example
-keeps everything in a single file so you can see the moving parts together.
-
-<Tabs>
-<TabItem value="task" label="Define a task handler">
-
-```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-task-definition
-
+```yaml
+dependencies:
+  stem:
+    path: ../packages/stem
 ```
 
-</TabItem>
-<TabItem value="runtime" label="Set up the broker, backend, and worker">
+Do not copy internal `package:stem/src/...` imports from repository tests or
+examples into application code; use the public exports documented here.
 
-```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-runtime-setup
+## The execution model
 
-```
+For tasks, the path is `producer → broker → worker → result backend`.
+`WorkflowHost.inMemory` packages the workflow app, worker, and in-memory store
+for a small process-local demo. It starts the app for you and owns it until
+`close()`.
 
-</TabItem>
-<TabItem value="enqueue" label="Start the worker and enqueue work">
+In-memory state is not restart-durable. For production, create a host with
+`WorkflowHost.create` and an app factory that configures a persistent adapter.
+Re-register the same executable workflow definitions after a restart and use
+`observe` with a saved run ID; observing does not submit a second run.
 
-```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-enqueue
+## What to remember
 
-```
+- Delivery and execution are **at least once**. Checkpointing reduces repeated
+  work, but external effects still need idempotency keys or deduplication.
+- `context.step` runs a local Dart callback. It is a workflow checkpoint, not a
+  remote activity or a new worker process.
+- `host.close()` stops local observation and closes resources it owns; it does
+  not cancel persisted runs or forcibly interrupt Dart code.
 
-</TabItem>
-</Tabs>
-
-## What You’ll Unlock
-
-- **Core pipeline** – Enqueue tasks with delays, priorities, retries, rate
-  limits, and canvas compositions, backed by result stores.
-- **Workers & signals** – Operate isolate-based workers, autoscale them,
-  and react to lifecycle signals.
-- **Observability & tooling** – Stream metrics, traces, heartbeats, and inspect
-  queues, DLQs, and schedules from the CLI.
-- **Security & deployment** – Sign payloads, enable TLS, and run Stem via
-  systemd/SysV or the multi-worker CLI wrapper.
-- **Enablement & quality** – Use runnable examples, runbooks, and automated
-  quality gates to keep deployments healthy.
-
-## Prerequisites
-
-- Dart **3.9.2+** installed (`dart --version`).
-- Access to the Dart pub cache (`dart pub ...`).
-- Optional but recommended: Docker Desktop or another container runtime for
-  local Redis/Postgres instances.
-- Optional: Node.js 18+ if you plan to run the documentation site locally.
-- A text editor capable of running Dart tooling (VS Code, IntelliJ, Neovim).
-
-## Onboarding Path
-
-1. **[Quick Start](./quick-start.md)** – Build and run your first Stem worker
-   entirely in memory while you learn the task pipeline primitives.
-2. **[First Steps](./first-steps.md)** – Bootstrap an in-memory `StemApp`,
-   enqueue work from a producer, and fetch persisted results.
-3. **[Connect to Infrastructure](./developer-environment.md)** – Point Stem at
-   Redis/Postgres, run workers/Beat across processes, and try routing/canvas
-   patterns.
-4. **[Observe & Operate](./observability-and-ops.md)** – Enable telemetry,
-   inspect heartbeats, replay DLQ entries, and wire control commands.
-5. **[Prepare for Production](./production-checklist.md)** – Enable signing,
-   TLS, daemonization, and automated quality gates before launch.
-
-Each step includes copy-pasteable code or CLI examples and ends with pointers
-to deeper reference material.
-
-> **Next:** Jump into the [Quick Start](./quick-start.md) to see Stem in action.
+Next: follow [Quick Start](./quick-start.md), then read
+[First Steps](./first-steps.md) if your app also has generated tasks.

@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:io';
 
@@ -15,12 +18,12 @@ Future<RedisResultBackend> connectBackend(String url, {TlsConfig? tls}) {
 }
 
 List<TaskHandler<Object?>> buildTasks() => [
-      FunctionTaskHandler<void>(
-        name: 'autoscale.work',
-        options: const TaskOptions(queue: autoscaleQueue),
-        entrypoint: _autoscaleEntrypoint,
-      ),
-    ];
+  FunctionTaskHandler<void>(
+    name: 'autoscale.work',
+    options: const TaskOptions(queue: autoscaleQueue),
+    entrypoint: _autoscaleEntrypoint,
+  ),
+];
 
 FutureOr<void> _autoscaleEntrypoint(
   TaskInvocationContext context,

@@ -2,6 +2,7 @@
 
 ## 0.3.0
 
+- Require Dart `>=3.13.0 <4.0.0`.
 - Preserve error data and timestamps for every terminal run. Use explicit topic
   prefixes for cleanup, including terminal failures and caller-supplied IDs
   containing `:wf:`. Reject malformed journal writes and empty journal fences.

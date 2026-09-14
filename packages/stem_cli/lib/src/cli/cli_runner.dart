@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -104,8 +107,7 @@ class HealthCommand extends Command<int> {
         'allow-insecure',
         defaultsTo: false,
         negatable: false,
-        help:
-            'Temporarily allow TLS handshakes without certificate validation for debugging.',
+        help: 'Temporarily allow TLS handshakes without certificate validation for debugging.',
       )
       ..addFlag(
         'json',

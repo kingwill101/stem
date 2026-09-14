@@ -1,8 +1,12 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:convert';
 
 import 'package:stem_cli/src/cli/cli_runner.dart' show CliContext;
 import 'package:stem_cli/src/cli/utilities.dart';
 import 'package:stem/stem.dart';
+
 import 'dart:async';
 
 import 'package:artisanal/args.dart';

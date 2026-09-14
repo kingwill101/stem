@@ -5,161 +5,73 @@ sidebar_position: 5
 slug: /getting-started/production-checklist
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+This checklist is about deployment decisions, not guarantees. Stem task
+delivery is at least once; handlers must make external effects idempotent.
+There is no exactly-once guarantee for a process, a broker acknowledgement, or
+a mobile application whose process is suspended or killed.
 
-You have Stem running with observability and operations tooling. This final
-step hardens the deployment: signing, TLS, daemon supervision, and automated
-quality gates so every rollout is repeatable.
+Paths beginning with `packages/` refer to a Stem source checkout. A published
+package may not include repository examples, templates, or test services; use
+the files in the version you actually publish.
 
-## 1. Sign Payloads and Rotate Keys
+## Before the first deployment
 
-Enable signing for producers and workers to detect tampering:
+- Pin `stem`, its broker adapter, and `stem_cli` versions together.
+- Run `dart format --output=none --set-exit-if-changed .`, `dart analyze`, and
+  the package tests in CI. Include adapter integration tests when services are
+  available.
+- Use durable broker, result, and workflow stores in production. In-memory
+  implementations are for tests and do not survive process restarts.
+- Give producers and workers the same queue, namespace, registration, routing,
+  and serialization configuration.
+- Size broker visibility and worker/workflow leases for the longest operation,
+  with renewal enabled. Expiry can cause redelivery while a handler runs.
+
+## Protect payloads and connections
+
+Stem supports HMAC-SHA256 and Ed25519 payload signing. Configure every producer
+and worker using the variables documented in
+[Payload Signing](../core-concepts/signing.md):
 
 ```bash
 export STEM_SIGNING_ALGORITHM=hmac-sha256
-export STEM_SIGNING_KEYS="v1:$(openssl rand -base64 32)"
+export STEM_SIGNING_KEYS="v1:<base64-secret>"
 export STEM_SIGNING_ACTIVE_KEY=v1
 ```
 
-In code, wire the signer into both producers and workers:
+During rotation, deploy readers with both keys, switch
+`STEM_SIGNING_ACTIVE_KEY`, then remove the retired key after old envelopes are
+drained. Never put real keys in source control or logs.
 
-<Tabs>
-<TabItem value="config" label="Load signing config">
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-config
-
-```
-
-</TabItem>
-<TabItem value="signer" label="Create the signer">
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-signer
-
-```
-
-</TabItem>
-<TabItem value="bootstrap" label="Tasks">
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-registry
-
-```
-
-</TabItem>
-<TabItem value="client" label="Client setup (signing enabled)">
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-client
-
-```
-
-</TabItem>
-<TabItem value="worker" label="Worker setup (verify signatures)">
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-worker
-
-```
-
-</TabItem>
-<TabItem value="enqueue" label="Signed enqueue + shutdown">
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-enqueue
-
-```
-
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-shutdown
-
-```
-
-</TabItem>
-</Tabs>
-
-When you rotate keys, set `STEM_SIGNING_KEYS` to include both the old and new
-entries, update `STEM_SIGNING_ACTIVE_KEY` with the new identifier, then deploy
-workers. Stem will accept signatures from any configured key until you remove
-retired entries.
-
-See [Payload Signing](../core-concepts/signing.md) for a full reference and
-Ed25519 guidance.
-
-## 2. Secure Connections with TLS
-
-Use the repo’s helper script to generate local certificates or plug in the ones
-issued by your platform:
+For TLS, use the adapter's TLS options and Stem's certificate variables:
 
 ```bash
-packages/stem/scripts/security/generate_tls_assets.sh --out tmp/tls
-
-export STEM_TLS_CA_CERT=$PWD/tmp/tls/ca.pem
-export STEM_TLS_CLIENT_CERT=$PWD/tmp/tls/client.pem
-export STEM_TLS_CLIENT_KEY=$PWD/tmp/tls/client-key.pem
+export STEM_TLS_CA_CERT=/etc/stem/ca.pem
+export STEM_TLS_CLIENT_CERT=/etc/stem/client.pem
+export STEM_TLS_CLIENT_KEY=/etc/stem/client-key.pem
 ```
 
-Any TLS handshake issues surface actionable logs; temporarily set
-`STEM_TLS_ALLOW_INSECURE=true` only while debugging.
+Treat `STEM_TLS_ALLOW_INSECURE=true` as a temporary diagnostic switch, never a
+production setting. Confirm URL schemes and certificate behavior with the
+adapter documentation.
 
-Update Redis/Postgres URLs to include TLS if required (for example,
-`rediss://host:port`).
+## Supervise and recover
 
-## 3. Supervise Processes with Managed Services
+Run workers under the service manager or container supervisor used by your
+platform. Configure graceful shutdown, resource limits, log collection, and a
+health check. Optional systemd/sysv templates are in
+`packages/stem/templates/`; verify their assumptions against your image.
 
-Stem ships ready-to-use templates under `packages/stem/templates/systemd/` and
-`packages/stem/templates/sysv/`. Drop in environment files with your Stem
-variables and enable the services:
+Keep an operator runbook for task/run IDs, draining and revoking work, DLQ
+inspection and replay, store restoration, and credential rotation. Replay only
+after fixing the cause.
 
-```bash
-sudo cp packages/stem/templates/systemd/stem-worker@.service /etc/systemd/system/
-sudo systemctl enable stem-worker@default.service
-sudo systemctl start stem-worker@default.service
+## Release gate
 
-sudo systemctl enable stem-scheduler.service
-sudo systemctl start stem-scheduler.service
-```
+In staging, exercise enqueue-to-completion, a handler retry, worker restart
+during a task, and workflow restart at a checkpoint. Check alerts for backlog,
+failed tasks, missing heartbeats, and DLQ growth. Record versions,
+configuration, migrations, and rollback steps.
 
-For bare-metal or container images, the CLI can manage multiple instances with
-templated PID/log locations:
-
-```bash
-stem worker multi start web-1 web-2 \
-  --command "/usr/bin/dart run bin/worker.dart" \
-  --pidfile /var/run/stem/%n.pid \
-  --logfile /var/log/stem/%n.log \
-  --env-file /etc/stem/worker.env
-```
-
-Verify health from your orchestration probes:
-
-```bash
-stem worker healthcheck --node web-1 --json
-stem worker diagnose --node web-1 \
-  --pidfile /var/run/stem/web-1.pid \
-  --logfile /var/log/stem/web-1.log
-```
-
-## 4. Final Pre-Flight Checklist
-
-Before every deployment run through these guardrails:
-
-- **Quality gates** – run the aggregate workflow or execute `dart format`,
-  `dart analyze --fatal-infos`, and the package test suites locally to execute
-  format, analyze, unit/chaos/perf tests, and coverage targets.
-- **Observability** – confirm Grafana dashboards (task success rate, latency
-  p95, queue depth) and OpenTelemetry exporters are healthy.
-- **Routing & schedules** – `stem routing dump --json` to confirm the active
-  configuration and `stem schedule dry-run` for all modified entries.
-- **DLQ hygiene** – ensure dead letters are empty or triaged with `stem dlq list`.
-- **Control plane** – dry-run worker commands (`stem worker ping`, 
-  `stem worker stats`) against staging to verify access.
-
-Document the results in your team’s runbook (see
-`packages/stem/doc/process/observability-runbook.md` and
-`packages/stem/doc/process/scheduler-parity.md`) so the production checklist
-stays auditable.
-
-## 5. Where to Go Next
-
-- Deep-dive into the [Core Concepts](../core-concepts/index.md) section for
-  everything you saw at a higher level.
-- Explore the [Workers](../workers/index.md) and
-  [Scheduler](../scheduler/index.md) docs for advanced tuning.
-- If you’re planning larger architecture changes, follow the OpenSpec workflow
-  documented in `openspec/AGENTS.md`.
+See [Reliability](./reliability.md), [Observe & Operate](./observability-and-ops.md),
+and [Troubleshooting](./troubleshooting.md).

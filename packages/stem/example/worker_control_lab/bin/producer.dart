@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:stem/stem.dart';
@@ -7,7 +10,8 @@ import 'package:stem_worker_control_lab/shared.dart';
 Future<void> main() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379/0';
-  final backendUrl = Platform.environment['STEM_RESULT_BACKEND_URL'] ??
+  final backendUrl =
+      Platform.environment['STEM_RESULT_BACKEND_URL'] ??
       'redis://localhost:6379/1';
   final longCount = int.tryParse(Platform.environment['LONG_TASKS'] ?? '') ?? 2;
   final quickCount =

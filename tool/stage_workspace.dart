@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:yaml/yaml.dart';
@@ -43,9 +46,8 @@ Future<void> main(List<String> args) async {
   while (pendingPackages.isNotEmpty) {
     final current = pendingPackages.removeLast();
     final yaml = loadYaml(
-      File(
-        '${packageEntries[current]!.source.path}/pubspec.yaml',
-      ).readAsStringSync(),
+      File('${packageEntries[current]!.source.path}/pubspec.yaml')
+          .readAsStringSync(),
     );
     for (final dependency in _localDependencyNames(yaml, packageEntries)) {
       if (requiredPackages.add(dependency)) {
@@ -104,9 +106,8 @@ Future<void> main(List<String> args) async {
         ..writeln('  ${dependency.key}:')
         ..writeln('    path: ${dependency.value}');
     }
-    File(
-      '${stagedDirectory.path}/pubspec_overrides.yaml',
-    ).writeAsStringSync(overrides.toString());
+    File('${stagedDirectory.path}/pubspec_overrides.yaml')
+        .writeAsStringSync(overrides.toString());
   }
 
   final selectedDirectory = Directory(
@@ -152,9 +153,8 @@ void _copyDirectory(Directory source, Directory destination) {
     if (entity is Directory) {
       _copyDirectory(entity, Directory('${destination.path}/$name'));
     } else if (entity is File) {
-      File(
-        '${destination.path}/$name',
-      ).writeAsBytesSync(entity.readAsBytesSync());
+      File('${destination.path}/$name')
+          .writeAsBytesSync(entity.readAsBytesSync());
     }
   }
 }

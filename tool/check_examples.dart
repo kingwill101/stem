@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -43,9 +46,8 @@ Future<void> main(List<String> args) async {
         _ExampleProject(
           path: p.dirname(entity.path),
           tool: dependencies.contains('flutter') ? 'flutter' : 'dart',
-          hasBuildRunner: _dependencyNames(
-            yaml['dev_dependencies'],
-          ).contains('build_runner'),
+          hasBuildRunner: _dependencyNames(yaml['dev_dependencies'])
+              .contains('build_runner'),
         ),
       );
     }

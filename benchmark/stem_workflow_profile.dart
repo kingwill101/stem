@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
@@ -255,7 +258,10 @@ Future<Map<String, Object?>> _runPhase(
           budget,
           onTimeout: () {
             deadlineObserved = true;
-            throw TimeoutException('$phase submission deadline exceeded', timeout);
+            throw TimeoutException(
+              '$phase submission deadline exceeded',
+              timeout,
+            );
           },
         );
       } finally {

@@ -10,8 +10,8 @@ Workflow observability in Stem comes from three layers:
 
 ## Logs
 
-Recent logging improvements add workflow context onto the internal
-`stem.workflow.run` task lines. You can now correlate:
+The internal `stem.workflow.run` task lines carry workflow context. Depending
+on the logger and lifecycle event, correlate:
 
 - `workflow`
 - `workflowRunId`
@@ -21,6 +21,8 @@ Recent logging improvements add workflow context onto the internal
 - `workflowStep` / checkpoint metadata
 
 The runtime also emits lifecycle logs for enqueue, suspend, fail, and complete.
+Treat logs as diagnostic signals rather than the source of truth: retries,
+redeliveries, and crashes can produce more than one line for one logical run.
 
 ## Store-backed inspection
 
@@ -33,6 +35,9 @@ Use the workflow store for operational queries:
 Use the runtime for definition-level inspection:
 
 - `workflowManifest()`
+
+Manifest entries distinguish declared flow `steps` from script
+`checkpoints`; use the latter when locating progress for a `WorkflowScript`.
 
 ## Dashboard and CLI
 
@@ -51,4 +56,6 @@ store healthy is what keeps the tools responsive.
 
 Workflow runs inherit Stem payload encoder behavior. Result encoder ids are
 persisted in `RunState.resultMeta`, which lets tooling decode stored outputs
-consistently across workers.
+consistently across workers. This is transport metadata; it does not make
+arbitrary values serializable. For application DTOs, use the same codec and
+version on the writer and reader.
