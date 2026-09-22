@@ -279,6 +279,78 @@ void main() {
     }
   });
 
+  test(
+    'concurrent same-ID dead-letter settlement retains one record',
+    () async {
+      final namespace = _uniqueNamespace();
+      final firstBroker = await RedisStreamsBroker.connect(
+        redisUrl,
+        namespace: namespace,
+        blockTime: const Duration(milliseconds: 100),
+      );
+      final secondBroker = await RedisStreamsBroker.connect(
+        redisUrl,
+        namespace: namespace,
+        blockTime: const Duration(milliseconds: 100),
+      );
+      StreamQueue<Delivery>? firstQueue;
+      StreamQueue<Delivery>? secondQueue;
+      try {
+        final queue = _uniqueQueue();
+        const group = 'dead-letter-race';
+        firstQueue = StreamQueue(
+          firstBroker.consume(
+            RoutingSubscription.singleQueue(queue),
+            consumerGroup: group,
+            consumerName: 'first',
+          ),
+        );
+        final firstEnvelope = Envelope(
+          id: 'same-logical-id',
+          name: 'integration.redis.dead_letter_race',
+          args: const {},
+          queue: queue,
+        );
+        await firstBroker.publish(firstEnvelope);
+        final firstDelivery = await firstQueue.next.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () =>
+              fail('first consumer timed out waiting for delivery'),
+        );
+
+        secondQueue = StreamQueue(
+          secondBroker.consume(
+            RoutingSubscription.singleQueue(queue),
+            consumerGroup: group,
+            consumerName: 'second',
+          ),
+        );
+        await secondBroker.publish(firstEnvelope.copyWith(attempt: 1));
+        final secondDelivery = await secondQueue.next.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () =>
+              fail('second consumer timed out waiting for delivery'),
+        );
+
+        await Future.wait([
+          firstBroker.deadLetter(firstDelivery, reason: 'first'),
+          secondBroker.deadLetter(secondDelivery, reason: 'second'),
+        ]);
+
+        final deadLetters = await firstBroker.listDeadLetters(queue, limit: 10);
+        expect(deadLetters.entries, hasLength(1));
+        expect(deadLetters.entries.single.envelope.id, firstEnvelope.id);
+        expect(deadLetters.entries.single.reason, anyOf('first', 'second'));
+        await firstBroker.purge(queue);
+      } finally {
+        await firstQueue?.cancel(immediate: true);
+        await secondQueue?.cancel(immediate: true);
+        await _safeCloseRedisBroker(firstBroker);
+        await _safeCloseRedisBroker(secondBroker);
+      }
+    },
+  );
+
   test('Redis broadcast fan-out delivers to all subscribers', () async {
     final namespace = _uniqueNamespace();
     final publisher = await RedisStreamsBroker.connect(

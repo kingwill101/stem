@@ -254,48 +254,120 @@ void main() {
   });
 
   test(
-    'repeated nack without requeue updates one dead-letter record',
+    'repeated nack without requeue updates one dead-letter record after reopen',
     () async {
       final broker = await SqliteBroker.open(
         dbFile,
         pollInterval: const Duration(milliseconds: 10),
         sweeperInterval: Duration.zero,
       );
-      addTearDown(broker.close);
       const queue = 'repeated-nack-dead-letter';
       final deliveries = StreamIterator(
         broker.consume(RoutingSubscription.singleQueue(queue)),
       );
       try {
-        for (var attempt = 0; attempt < 2; attempt++) {
-          await broker.publish(
-            Envelope(
-              id: 'repeated-nack-task',
-              name: 'sqlite.repeated.nack',
-              args: const {},
-              queue: queue,
-              attempt: attempt,
-              maxRetries: 5,
-            ),
-          );
-          expect(
-            await deliveries.moveNext().timeout(const Duration(seconds: 5)),
-            isTrue,
-          );
-          await broker.nack(deliveries.current, requeue: false);
-        }
+        await broker.publish(
+          Envelope(
+            id: 'repeated-nack-task',
+            name: 'sqlite.repeated.nack',
+            args: const {},
+            queue: queue,
+            maxRetries: 5,
+          ),
+        );
+        expect(
+          await deliveries.moveNext().timeout(const Duration(seconds: 5)),
+          isTrue,
+        );
+        await broker.nack(deliveries.current, requeue: false);
       } finally {
         await deliveries.cancel();
+        await broker.close();
       }
 
-      final deadLetters = await broker.listDeadLetters(queue, limit: 10);
+      final reopened = await SqliteBroker.open(
+        dbFile,
+        pollInterval: const Duration(milliseconds: 10),
+        sweeperInterval: Duration.zero,
+      );
+      addTearDown(reopened.close);
+      final redeliveries = StreamIterator(
+        reopened.consume(RoutingSubscription.singleQueue(queue)),
+      );
+      try {
+        await reopened.publish(
+          Envelope(
+            id: 'repeated-nack-task',
+            name: 'sqlite.repeated.nack',
+            args: const {},
+            queue: queue,
+            attempt: 1,
+            maxRetries: 5,
+          ),
+        );
+        expect(
+          await redeliveries.moveNext().timeout(const Duration(seconds: 5)),
+          isTrue,
+        );
+        await reopened.nack(redeliveries.current, requeue: false);
+      } finally {
+        await redeliveries.cancel();
+      }
+
+      final deadLetters = await reopened.listDeadLetters(queue, limit: 10);
       expect(deadLetters.entries, hasLength(1));
       expect(deadLetters.entries.single.envelope.id, 'repeated-nack-task');
       expect(deadLetters.entries.single.envelope.attempt, 1);
-      expect(await broker.pendingCount(queue), 0);
-      expect(await broker.inflightCount(queue), 0);
+      expect(await reopened.pendingCount(queue), 0);
+      expect(await reopened.inflightCount(queue), 0);
     },
   );
+
+  test('distinct task IDs retain independent dead-letter records', () async {
+    final broker = await SqliteBroker.open(
+      dbFile,
+      pollInterval: const Duration(milliseconds: 10),
+      sweeperInterval: Duration.zero,
+    );
+    addTearDown(broker.close);
+    const queue = 'distinct-dead-letter-tasks';
+    final deliveries = StreamIterator(
+      broker.consume(
+        RoutingSubscription.singleQueue(queue),
+        prefetch: 2,
+      ),
+    );
+    try {
+      for (final id in ['distinct-task-a', 'distinct-task-b']) {
+        await broker.publish(
+          Envelope(
+            id: id,
+            name: 'sqlite.distinct.nack',
+            args: const {},
+            queue: queue,
+            maxRetries: 5,
+          ),
+        );
+      }
+      for (var i = 0; i < 2; i++) {
+        expect(
+          await deliveries.moveNext().timeout(const Duration(seconds: 5)),
+          isTrue,
+        );
+        await broker.nack(deliveries.current, requeue: false);
+      }
+    } finally {
+      await deliveries.cancel();
+    }
+
+    final deadLetters = await broker.listDeadLetters(queue, limit: 10);
+    expect(
+      deadLetters.entries.map((entry) => entry.envelope.id).toSet(),
+      equals({'distinct-task-a', 'distinct-task-b'}),
+    );
+    expect(await broker.pendingCount(queue), 0);
+    expect(await broker.inflightCount(queue), 0);
+  });
 
   runBrokerContractTests(
     adapterName: 'SQLite',
