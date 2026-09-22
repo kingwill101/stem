@@ -294,13 +294,13 @@ void main() {
         blockTime: const Duration(milliseconds: 100),
       );
       StreamQueue<Delivery>? firstQueue;
-      StreamQueue<Delivery>? secondQueue;
       try {
         final queue = _uniqueQueue();
         firstQueue = StreamQueue(
           firstBroker.consume(
             RoutingSubscription.singleQueue(queue),
             consumerName: 'first',
+            prefetch: 2,
           ),
         );
         final firstEnvelope = Envelope(
@@ -310,25 +310,16 @@ void main() {
           queue: queue,
         );
         await firstBroker.publish(firstEnvelope);
+        await firstBroker.publish(firstEnvelope.copyWith(attempt: 1));
         final firstDelivery = await firstQueue.next.timeout(
           const Duration(seconds: 5),
           onTimeout: () =>
-              fail('first consumer timed out waiting for delivery'),
+              fail('consumer timed out waiting for first delivery'),
         );
-        await firstQueue.cancel(immediate: true);
-        firstQueue = null;
-
-        secondQueue = StreamQueue(
-          secondBroker.consume(
-            RoutingSubscription.singleQueue(queue),
-            consumerName: 'second',
-          ),
-        );
-        await secondBroker.publish(firstEnvelope.copyWith(attempt: 1));
-        final secondDelivery = await secondQueue.next.timeout(
+        final secondDelivery = await firstQueue.next.timeout(
           const Duration(seconds: 5),
           onTimeout: () =>
-              fail('second consumer timed out waiting for delivery'),
+              fail('consumer timed out waiting for second delivery'),
         );
 
         await Future.wait([
@@ -343,7 +334,6 @@ void main() {
         await firstBroker.purge(queue);
       } finally {
         await firstQueue?.cancel(immediate: true);
-        await secondQueue?.cancel(immediate: true);
         await _safeCloseRedisBroker(firstBroker);
         await _safeCloseRedisBroker(secondBroker);
       }
