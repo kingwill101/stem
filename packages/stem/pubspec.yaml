@@ -1,6 +1,6 @@
 name: stem
 description: "Experimental Dart-native background job platform with Redis Streams, retries, scheduling, observability, and security tooling."
-version: 0.5.0
+version: 0.5.1
 repository: https://github.com/kingwill101/stem
 resolution: workspace
 environment:

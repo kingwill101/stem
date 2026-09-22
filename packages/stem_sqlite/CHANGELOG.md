@@ -1,9 +1,12 @@
 # Changelog
 
-## 0.3.0
+## 0.3.1
 
 - Upsert repeated dead-letter task IDs transactionally, retaining the latest
   terminal delivery instead of raising a uniqueness error.
+
+## 0.3.0
+
 - Ship a package skill for SQLite-backed workflows and persistent restart.
 - Require Dart `>=3.13.0 <4.0.0`.
 - Use shared journal argument validation so malformed writes raise `ArgumentError`
