@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Add shared broker coverage for repeated logical task IDs and latest
+  dead-letter retention.
 - Require Dart `>=3.13.0 <4.0.0`.
 - Verify terminal error/timestamp immutability, malformed journal argument
   rejection, empty-token rejection, and quoted-name/empty-retention rewind cases.

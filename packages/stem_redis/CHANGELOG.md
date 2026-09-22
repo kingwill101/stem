@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Replace an earlier dead-letter record when the same logical task ID is
+  dead-lettered again.
 - Require Dart `>=3.13.0 <4.0.0`.
 - Preserve error data and timestamps for every terminal run. Use explicit topic
   prefixes for cleanup, including terminal failures and caller-supplied IDs
