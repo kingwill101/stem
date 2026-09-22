@@ -1009,6 +1009,17 @@ class RedisStreamsBroker
   }) async {
     final info = _parseReceipt(delivery.receipt);
     await _send(['XACK', info.stream, info.group, info.id]);
+    final existing = await _fetchDeadLetters(delivery.envelope.queue);
+    for (final candidate in existing) {
+      if (candidate.entry.envelope.id == delivery.envelope.id) {
+        await _send([
+          'LREM',
+          _deadKey(delivery.envelope.queue),
+          '1',
+          candidate.raw,
+        ]);
+      }
+    }
     await _send([
       'LPUSH',
       _deadKey(delivery.envelope.queue),

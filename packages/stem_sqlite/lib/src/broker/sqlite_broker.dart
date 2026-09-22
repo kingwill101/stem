@@ -307,8 +307,8 @@ class SqliteBroker
           .whereEquals('namespace', namespace)
           .delete();
       if (row != null) {
-        await txn.repository<StemDeadLetter>().insert(
-          StemDeadLetterInsertDto(
+        await txn.repository<StemDeadLetter>().upsert(
+          StemDeadLetter(
             id: row.id,
             namespace: namespace,
             queue: row.queue,
@@ -316,7 +316,8 @@ class SqliteBroker
             reason: reason,
             meta: meta,
             deadAt: now,
-          ),
+          ).toTracked(),
+          uniqueBy: ['id'],
         );
       }
     });

@@ -253,6 +253,50 @@ void main() {
     });
   });
 
+  test(
+    'repeated nack without requeue updates one dead-letter record',
+    () async {
+      final broker = await SqliteBroker.open(
+        dbFile,
+        pollInterval: const Duration(milliseconds: 10),
+        sweeperInterval: Duration.zero,
+      );
+      addTearDown(broker.close);
+      const queue = 'repeated-nack-dead-letter';
+      final deliveries = StreamIterator(
+        broker.consume(RoutingSubscription.singleQueue(queue)),
+      );
+      try {
+        for (var attempt = 0; attempt < 2; attempt++) {
+          await broker.publish(
+            Envelope(
+              id: 'repeated-nack-task',
+              name: 'sqlite.repeated.nack',
+              args: const {},
+              queue: queue,
+              attempt: attempt,
+              maxRetries: 5,
+            ),
+          );
+          expect(
+            await deliveries.moveNext().timeout(const Duration(seconds: 5)),
+            isTrue,
+          );
+          await broker.nack(deliveries.current, requeue: false);
+        }
+      } finally {
+        await deliveries.cancel();
+      }
+
+      final deadLetters = await broker.listDeadLetters(queue, limit: 10);
+      expect(deadLetters.entries, hasLength(1));
+      expect(deadLetters.entries.single.envelope.id, 'repeated-nack-task');
+      expect(deadLetters.entries.single.envelope.attempt, 1);
+      expect(await broker.pendingCount(queue), 0);
+      expect(await broker.inflightCount(queue), 0);
+    },
+  );
+
   runBrokerContractTests(
     adapterName: 'SQLite',
     factory: BrokerContractFactory(

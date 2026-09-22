@@ -338,6 +338,71 @@ void runBrokerContractTests({
       await _purgeAll(currentBroker, queue);
     });
 
+    test(
+      'repeated dead-lettering of one task id settles each delivery',
+      () async {
+        final currentBroker = broker!;
+        final queue = _queueName('dead-letter-repeat');
+        final firstEnvelope = Envelope(
+          id: 'repeated-dead-letter-task',
+          name: 'contract.dlq.repeat',
+          args: const {},
+          queue: queue,
+        );
+        final secondEnvelope = firstEnvelope.copyWith(attempt: 1);
+
+        await currentBroker.publish(firstEnvelope);
+        final firstDelivery = await _expectDelivery(
+          broker: currentBroker,
+          queue: queue,
+        );
+        expect(firstDelivery, isNotNull);
+        await currentBroker.deadLetter(firstDelivery!, reason: 'first-failure');
+
+        await currentBroker.publish(secondEnvelope);
+        final secondDelivery = await _expectDelivery(
+          broker: currentBroker,
+          queue: queue,
+        );
+        expect(secondDelivery, isNotNull);
+        await currentBroker.deadLetter(
+          secondDelivery!,
+          reason: 'latest-failure',
+        );
+
+        final page = await _waitFor<DeadLetterPage>(
+          evaluate: () => currentBroker.listDeadLetters(queue, limit: 10),
+          predicate: (value) => value.entries.any(
+            (entry) => entry.envelope.id == firstEnvelope.id,
+          ),
+          timeout: settings.queueSettleDelay * 5,
+          pollInterval: settings.queueSettleDelay,
+        );
+        expect(page.entries, hasLength(1));
+        expect(page.entries.single.envelope.id, firstEnvelope.id);
+        expect(page.entries.single.envelope.attempt, secondEnvelope.attempt);
+        expect(page.entries.single.reason, 'latest-failure');
+        final latest = await currentBroker.getDeadLetter(
+          queue,
+          firstEnvelope.id,
+        );
+        expect(latest, isNotNull);
+        expect(latest!.envelope.attempt, secondEnvelope.attempt);
+        expect(latest.reason, 'latest-failure');
+
+        final pending = await currentBroker.pendingCount(queue);
+        if (pending != null) {
+          expect(pending, equals(0));
+        }
+        final inflight = await currentBroker.inflightCount(queue);
+        if (inflight != null) {
+          expect(inflight, equals(0));
+        }
+
+        await _purgeAll(currentBroker, queue);
+      },
+    );
+
     test('dead letter entries are retrievable and purgeable', () async {
       final currentBroker = broker!;
       final queue = _queueName('dead-letter-get');
