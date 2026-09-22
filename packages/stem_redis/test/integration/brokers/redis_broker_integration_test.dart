@@ -297,11 +297,9 @@ void main() {
       StreamQueue<Delivery>? secondQueue;
       try {
         final queue = _uniqueQueue();
-        const group = 'dead-letter-race';
         firstQueue = StreamQueue(
           firstBroker.consume(
             RoutingSubscription.singleQueue(queue),
-            consumerGroup: group,
             consumerName: 'first',
           ),
         );
@@ -321,7 +319,6 @@ void main() {
         secondQueue = StreamQueue(
           secondBroker.consume(
             RoutingSubscription.singleQueue(queue),
-            consumerGroup: group,
             consumerName: 'second',
           ),
         );
