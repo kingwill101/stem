@@ -315,6 +315,8 @@ void main() {
           onTimeout: () =>
               fail('first consumer timed out waiting for delivery'),
         );
+        await firstQueue.cancel(immediate: true);
+        firstQueue = null;
 
         secondQueue = StreamQueue(
           secondBroker.consume(
