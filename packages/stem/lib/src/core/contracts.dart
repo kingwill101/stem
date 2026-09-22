@@ -223,6 +223,10 @@ abstract interface class InspectableBroker {
 /// Optional broker capability for dead-letter inspection and replay.
 abstract interface class DeadLetterBroker {
   /// Moves a delivery to the dead-letter store.
+  ///
+  /// Dead-letter records are keyed by the envelope's logical ID. If the same
+  /// task is dead-lettered again, its latest terminal delivery replaces the
+  /// previous record.
   Future<void> deadLetter(
     Delivery delivery, {
     String? reason,
@@ -262,7 +266,8 @@ abstract class Broker implements QueueBroker {
   /// Sends the [delivery] to the dead letter queue.
   ///
   /// [reason] provides the reason for dead lettering, and [meta] additional
-  /// data.
+  /// data. A later terminal delivery with the same logical envelope ID
+  /// replaces the earlier dead-letter record.
   Future<void> deadLetter(
     Delivery delivery, {
     String? reason,

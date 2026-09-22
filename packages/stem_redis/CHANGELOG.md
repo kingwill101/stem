@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Replace an earlier dead-letter record when the same logical task ID is
+  dead-lettered again.
+
 ## 0.3.0
 
 - Require Dart `>=3.13.0 <4.0.0`.

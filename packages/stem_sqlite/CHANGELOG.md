@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Upsert repeated dead-letter task IDs transactionally, retaining the latest
+  terminal delivery instead of raising a uniqueness error.
+
 ## 0.3.0
 
 - Ship a package skill for SQLite-backed workflows and persistent restart.

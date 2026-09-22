@@ -279,6 +279,67 @@ void main() {
     }
   });
 
+  test(
+    'concurrent same-ID dead-letter settlement retains one record',
+    () async {
+      final namespace = _uniqueNamespace();
+      final firstBroker = await RedisStreamsBroker.connect(
+        redisUrl,
+        namespace: namespace,
+        blockTime: const Duration(milliseconds: 100),
+      );
+      final secondBroker = await RedisStreamsBroker.connect(
+        redisUrl,
+        namespace: namespace,
+        blockTime: const Duration(milliseconds: 100),
+      );
+      StreamQueue<Delivery>? firstQueue;
+      try {
+        final queue = _uniqueQueue();
+        firstQueue = StreamQueue(
+          firstBroker.consume(
+            RoutingSubscription.singleQueue(queue),
+            consumerName: 'first',
+            prefetch: 2,
+          ),
+        );
+        final firstEnvelope = Envelope(
+          id: 'same-logical-id',
+          name: 'integration.redis.dead_letter_race',
+          args: const {},
+          queue: queue,
+        );
+        await firstBroker.publish(firstEnvelope);
+        await firstBroker.publish(firstEnvelope.copyWith(attempt: 1));
+        final firstDelivery = await firstQueue.next.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () =>
+              fail('consumer timed out waiting for first delivery'),
+        );
+        final secondDelivery = await firstQueue.next.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () =>
+              fail('consumer timed out waiting for second delivery'),
+        );
+
+        await Future.wait([
+          firstBroker.deadLetter(firstDelivery, reason: 'first'),
+          secondBroker.deadLetter(secondDelivery, reason: 'second'),
+        ]);
+
+        final deadLetters = await firstBroker.listDeadLetters(queue, limit: 10);
+        expect(deadLetters.entries, hasLength(1));
+        expect(deadLetters.entries.single.envelope.id, firstEnvelope.id);
+        expect(deadLetters.entries.single.reason, anyOf('first', 'second'));
+        await firstBroker.purge(queue);
+      } finally {
+        await firstQueue?.cancel(immediate: true);
+        await _safeCloseRedisBroker(firstBroker);
+        await _safeCloseRedisBroker(secondBroker);
+      }
+    },
+  );
+
   test('Redis broadcast fan-out delivers to all subscribers', () async {
     final namespace = _uniqueNamespace();
     final publisher = await RedisStreamsBroker.connect(

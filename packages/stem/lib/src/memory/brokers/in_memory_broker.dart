@@ -525,6 +525,9 @@ class _QueueState {
     if (envelope == null) {
       return;
     }
+    deadLetters.removeWhere(
+      (entry) => entry.envelope.id == envelope.id,
+    );
     deadLetters.add(
       DeadLetterEntry(
         envelope: envelope,
