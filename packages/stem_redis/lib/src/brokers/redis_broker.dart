@@ -206,6 +206,18 @@ class RedisStreamsBroker
   String _groupKey(String queue) => '$namespace:group:$queue';
   String _delayedKey(String queue) => '$namespace:delayed:$queue';
   String _deadKey(String queue) => '$namespace:dead:$queue';
+  String _deadIndexKey(String queue) => '$namespace:dead-index:$queue';
+
+  static const _storeDeadLetterScript = '''
+local previous = redis.call('HGET', KEYS[3], ARGV[3])
+redis.call('HSET', KEYS[3], ARGV[3], ARGV[4])
+redis.call('LPUSH', KEYS[2], ARGV[4])
+if previous then
+  redis.call('LREM', KEYS[2], 1, previous)
+end
+redis.call('XACK', KEYS[1], ARGV[1], ARGV[2])
+return 1
+''';
 
   String _broadcastStreamKey(String channel) => '$namespace:broadcast:$channel';
   String _broadcastGroupKey(String channel, String consumer) =>
@@ -1008,27 +1020,23 @@ class RedisStreamsBroker
     Map<String, Object?>? meta,
   }) async {
     final info = _parseReceipt(delivery.receipt);
-    await _send(['XACK', info.stream, info.group, info.id]);
-    final existing = await _fetchDeadLetters(delivery.envelope.queue);
-    for (final candidate in existing) {
-      if (candidate.entry.envelope.id == delivery.envelope.id) {
-        await _send([
-          'LREM',
-          _deadKey(delivery.envelope.queue),
-          '1',
-          candidate.raw,
-        ]);
-      }
-    }
+    final raw = jsonEncode({
+      'envelope': delivery.envelope.toJson(),
+      'reason': reason,
+      'meta': meta,
+      'deadAt': stemNow().toIso8601String(),
+    });
     await _send([
-      'LPUSH',
+      'EVAL',
+      _storeDeadLetterScript,
+      '3',
+      info.stream,
       _deadKey(delivery.envelope.queue),
-      jsonEncode({
-        'envelope': delivery.envelope.toJson(),
-        'reason': reason,
-        'meta': meta,
-        'deadAt': stemNow().toIso8601String(),
-      }),
+      _deadIndexKey(delivery.envelope.queue),
+      info.group,
+      info.id,
+      delivery.envelope.id,
+      raw,
     ]);
   }
 
@@ -1063,6 +1071,10 @@ class RedisStreamsBroker
 
   @override
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
+    final raw = await _send(['HGET', _deadIndexKey(queue), id]);
+    if (raw is String) {
+      return _decodeDeadLetter(raw);
+    }
     final stored = await _fetchDeadLetters(queue);
     for (final entry in stored) {
       if (entry.entry.envelope.id == id) {
@@ -1098,6 +1110,7 @@ class RedisStreamsBroker
     final now = stemNow();
     for (final candidate in selected) {
       await _send(['LREM', _deadKey(queue), '1', candidate.raw]);
+      await _send(['HDEL', _deadIndexKey(queue), candidate.entry.envelope.id]);
       final replayEnvelope = candidate.entry.envelope.copyWith(
         attempt: candidate.entry.envelope.attempt + 1,
         notBefore: delay != null
@@ -1132,6 +1145,7 @@ class RedisStreamsBroker
     if (since == null && (limit == null || limit < 0)) {
       final length = await _send(['LLEN', _deadKey(queue)]);
       await _send(['DEL', _deadKey(queue)]);
+      await _send(['DEL', _deadIndexKey(queue)]);
       return _asInt(length);
     }
 
@@ -1145,6 +1159,7 @@ class RedisStreamsBroker
         : candidates;
     for (final candidate in selected) {
       await _send(['LREM', _deadKey(queue), '1', candidate.raw]);
+      await _send(['HDEL', _deadIndexKey(queue), candidate.entry.envelope.id]);
     }
     return selected.length;
   }
@@ -1190,6 +1205,7 @@ class RedisStreamsBroker
     }
     await _send(['DEL', _delayedKey(queue)]);
     await _send(['DEL', _deadKey(queue)]);
+    await _send(['DEL', _deadIndexKey(queue)]);
   }
 
   @override

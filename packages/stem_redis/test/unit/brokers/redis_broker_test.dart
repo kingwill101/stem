@@ -63,6 +63,7 @@ void main() {
 
       expect(delTargets.contains('unit:delayed:emails'), isTrue);
       expect(delTargets.contains('unit:dead:emails'), isTrue);
+      expect(delTargets.contains('unit:dead-index:emails'), isTrue);
     });
 
     test(
