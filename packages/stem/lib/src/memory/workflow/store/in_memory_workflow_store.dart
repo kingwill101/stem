@@ -5,6 +5,7 @@ import 'dart:collection';
 
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_concurrent_step.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_journal.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -21,7 +22,8 @@ class InMemoryWorkflowStore
         WorkflowRunChanges,
         FencedWorkflowStore,
         WorkflowTerminalStore,
-        WorkflowJournalStore {
+        WorkflowJournalStore,
+        WorkflowConcurrentStore {
   /// Creates an in-memory workflow store using the provided [clock].
   InMemoryWorkflowStore({WorkflowClock clock = const SystemWorkflowClock()})
     : _clock = clock;
@@ -39,6 +41,8 @@ class InMemoryWorkflowStore
   final _journal =
       <String, Map<(WorkflowJournalKind, String), WorkflowJournalEntry>>{};
   final _journalOrder = <String, int>{};
+  final _concurrentSteps =
+      <String, Map<String, WorkflowConcurrentStepRecord>>{};
 
   @override
   Stream<void> watchRunChanges(String runId) => Stream<void>.multi((listener) {
@@ -66,6 +70,122 @@ class InMemoryWorkflowStore
     if (controller != null && !controller.isClosed) {
       controller.add(null);
     }
+  }
+
+  @override
+  Future<WorkflowConcurrentStepRecord?> readConcurrentStep(
+    String runId,
+    String invocationId,
+  ) async => _concurrentSteps[runId]?[invocationId];
+
+  @override
+  Future<WorkflowConcurrentStepRecord> writeConcurrentStep(
+    WorkflowConcurrentStepRecord record, {
+    int? expectedRevision,
+    required String executionId,
+  }) async {
+    final run = _runs[record.runId];
+    if (run == null) throw StateError('Unknown workflow run ${record.runId}.');
+    if (executionId.isEmpty || record.executionId != executionId) {
+      throw StateError('Concurrent checkpoint execution fence mismatch.');
+    }
+    final records = _concurrentSteps.putIfAbsent(record.runId, () => {});
+    final previous = records[record.invocationId];
+    if (expectedRevision != null &&
+        (previous?.revision ?? 0) != expectedRevision) {
+      throw StateError('Concurrent checkpoint revision conflict.');
+    }
+    if (previous?.status == WorkflowConcurrentStepStatus.completed &&
+        record.status != WorkflowConcurrentStepStatus.completed) {
+      throw StateError('Completed concurrent checkpoint is immutable.');
+    }
+    if (previous != null && record.revision <= previous.revision) {
+      throw StateError('Concurrent checkpoint revision must increase.');
+    }
+    records[record.invocationId] = record;
+    _runs[record.runId] = run.copyWith(updatedAt: _clock.now());
+    _notifyRunChanged(record.runId);
+    return record;
+  }
+
+  @override
+  Future<List<WorkflowConcurrentStepRecord>> resolveConcurrentEvents(
+    String topic,
+    Map<String, Object?> payload, {
+    int limit = 256,
+  }) async {
+    final resolved = <WorkflowConcurrentStepRecord>[];
+    for (final records in _concurrentSteps.values) {
+      for (final entry in records.entries) {
+        if (resolved.length >= limit) break;
+        final current = entry.value;
+        final suspension = current.suspensionData;
+        if (current.status != WorkflowConcurrentStepStatus.suspended ||
+            suspension?['topic'] != topic) continue;
+        final next = WorkflowConcurrentStepRecord(
+          runId: current.runId, invocationId: current.invocationId,
+          branch: current.branch, stepName: current.stepName,
+          stepIndex: current.stepIndex, iteration: current.iteration,
+          revision: current.revision + 1,
+          status: WorkflowConcurrentStepStatus.ready,
+          executionId: current.executionId, value: current.value,
+          suspensionData: <String, Object?>{
+            ...?suspension, 'payload': Map<String, Object?>.from(payload),
+          },
+          error: current.error, stack: current.stack, updatedAt: _clock.now(),
+        );
+        records[entry.key] = next;
+        resolved.add(next);
+        _notifyRunChanged(current.runId);
+      }
+    }
+    return resolved;
+  }
+
+  @override
+  Future<List<WorkflowConcurrentStepRecord>> resumeDueConcurrentSteps(
+    DateTime now, {
+    int limit = 256,
+  }) async {
+    final resolved = <WorkflowConcurrentStepRecord>[];
+    for (final records in _concurrentSteps.values) {
+      for (final entry in records.entries) {
+        if (resolved.length >= limit) break;
+        final current = entry.value;
+        final data = current.suspensionData;
+        final raw = data?['dueAt'] ?? data?['resumeAt'] ?? data?['deadline'];
+        final due = raw is String ? DateTime.tryParse(raw) : null;
+        if (current.status != WorkflowConcurrentStepStatus.suspended ||
+            due == null || due.isAfter(now)) continue;
+        final next = WorkflowConcurrentStepRecord(
+          runId: current.runId, invocationId: current.invocationId,
+          branch: current.branch, stepName: current.stepName,
+          stepIndex: current.stepIndex, iteration: current.iteration,
+          revision: current.revision + 1,
+          status: WorkflowConcurrentStepStatus.ready,
+          executionId: current.executionId, value: current.value,
+          suspensionData: data, error: current.error, stack: current.stack,
+          updatedAt: _clock.now(),
+        );
+        records[entry.key] = next;
+        resolved.add(next);
+        _notifyRunChanged(current.runId);
+      }
+    }
+    return resolved;
+  }
+
+  @override
+  Future<List<WorkflowConcurrentStepRecord>> listConcurrentSteps(
+    String runId,
+  ) async => List.unmodifiable(
+    _concurrentSteps[runId]?.values ?? const <WorkflowConcurrentStepRecord>[],
+  );
+
+  @override
+  Future<void> clearConcurrentSteps(String runId) async {
+    _concurrentSteps.remove(runId);
+    _notifyRunChanged(runId);
   }
 
   @override
