@@ -86,7 +86,11 @@ class InMemoryWorkflowStore
   }) async {
     final run = _runs[record.runId];
     if (run == null) throw StateError('Unknown workflow run ${record.runId}.');
-    if (executionId.isEmpty || record.executionId != executionId) {
+    if (executionId.isEmpty ||
+        record.executionId != executionId ||
+        run.executionId != executionId ||
+        (run.status != WorkflowStatus.running &&
+            run.status != WorkflowStatus.suspended)) {
       throw StateError('Concurrent checkpoint execution fence mismatch.');
     }
     final records = _concurrentSteps.putIfAbsent(record.runId, () => {});
@@ -95,8 +99,7 @@ class InMemoryWorkflowStore
         (previous?.revision ?? 0) != expectedRevision) {
       throw StateError('Concurrent checkpoint revision conflict.');
     }
-    if (previous?.status == WorkflowConcurrentStepStatus.completed &&
-        record.status != WorkflowConcurrentStepStatus.completed) {
+    if (previous?.status == WorkflowConcurrentStepStatus.completed) {
       throw StateError('Completed concurrent checkpoint is immutable.');
     }
     if (previous != null && record.revision <= previous.revision) {
@@ -120,7 +123,11 @@ class InMemoryWorkflowStore
         if (resolved.length >= limit) break;
         final current = entry.value;
         final suspension = current.suspensionData;
-        if (current.status != WorkflowConcurrentStepStatus.suspended ||
+        final run = _runs[current.runId];
+        if (run == null ||
+            (run.status != WorkflowStatus.running &&
+                run.status != WorkflowStatus.suspended) ||
+            current.status != WorkflowConcurrentStepStatus.suspended ||
             suspension?['topic'] != topic) continue;
         final next = WorkflowConcurrentStepRecord(
           runId: current.runId, invocationId: current.invocationId,
@@ -155,7 +162,11 @@ class InMemoryWorkflowStore
         final data = current.suspensionData;
         final raw = data?['dueAt'] ?? data?['resumeAt'] ?? data?['deadline'];
         final due = raw is String ? DateTime.tryParse(raw) : null;
-        if (current.status != WorkflowConcurrentStepStatus.suspended ||
+        final run = _runs[current.runId];
+        if (run == null ||
+            (run.status != WorkflowStatus.running &&
+                run.status != WorkflowStatus.suspended) ||
+            current.status != WorkflowConcurrentStepStatus.suspended ||
             due == null || due.isAfter(now)) continue;
         final next = WorkflowConcurrentStepRecord(
           runId: current.runId, invocationId: current.invocationId,
