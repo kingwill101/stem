@@ -1,5 +1,6 @@
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_concurrent_step.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_step_entry.dart';
 import 'package:stem/src/workflow/core/workflow_watcher.dart';
@@ -173,6 +174,48 @@ abstract class WorkflowStore {
 abstract interface class WorkflowRunChanges {
   /// Watches complete change notifications for [runId].
   Stream<void> watchRunChanges(String runId);
+}
+
+/// Optional persistence capability for concurrent script checkpoints.
+///
+/// Each invocation is an independent state machine keyed by
+/// `(runId, invocationId)`. Implementations must apply every mutation
+/// atomically and reject stale `executionId`/`revision` values. In particular,
+/// event and timer resolution must transition each matching child independently
+/// and retain its payload; they must never overwrite a sibling's suspension.
+abstract interface class WorkflowConcurrentStore {
+  /// Reads one invocation, or `null` when it has not been admitted.
+  Future<WorkflowConcurrentStepRecord?> readConcurrentStep(
+    String runId,
+    String invocationId,
+  );
+
+  /// Inserts or advances a record using its expected revision and execution
+  /// fence. A completed record is immutable.
+  Future<WorkflowConcurrentStepRecord> writeConcurrentStep(
+    WorkflowConcurrentStepRecord record, {
+    int? expectedRevision,
+    required String executionId,
+  });
+
+  /// Resolves event waits independently, buffering one payload per invocation.
+  Future<List<WorkflowConcurrentStepRecord>> resolveConcurrentEvents(
+    String topic,
+    Map<String, Object?> payload, {
+    int limit = 256,
+  });
+
+  /// Resolves all due sleep/deadline waits independently.
+  Future<List<WorkflowConcurrentStepRecord>> resumeDueConcurrentSteps(
+    DateTime now, {
+    int limit = 256,
+  });
+
+  /// Lists all child records, including suspended and completed children.
+  Future<List<WorkflowConcurrentStepRecord>> listConcurrentSteps(String runId);
+
+  /// Clears child records during explicit rewind/cleanup.
+  Future<void> clearConcurrentSteps(String runId);
 }
 
 /// Optional atomic completion/cancellation capability.

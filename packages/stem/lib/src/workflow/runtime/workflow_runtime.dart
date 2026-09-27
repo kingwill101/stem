@@ -1287,6 +1287,10 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       // stale worker's control flow as a workflow failure.
       return;
     } catch (error, stack) {
+      // Future.wait defaults to eagerError. Drain siblings before recording
+      // failure or releasing the claim so late checkpoint writes cannot race
+      // the terminal transition.
+      await execution.drainSteps();
       await _failAttempt(
         runState,
         error,
@@ -2239,6 +2243,7 @@ class _WorkflowScriptExecution
   final TaskContext? taskContext;
   final WorkflowExecutionClaim? executionClaim;
   final Map<String, int> _completedIterations;
+  final Set<Future<Object?>> _activeSteps = <Future<Object?>>{};
   final WorkflowCancellationPolicy? policy;
   final WorkflowClock clock;
   Object? _previousResult;
@@ -2270,11 +2275,41 @@ class _WorkflowScriptExecution
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
-  }) => _step(
-    name,
-    handler,
-    autoVersion: autoVersion,
-  );
+  }) {
+    // Allocate identity before the first await.  An async `_step` cannot do
+    // this itself: two sibling calls otherwise observe the same index.
+    final index = _stepIndex++;
+    final previous = _previousResult;
+    final future = _step(
+      name,
+      handler,
+      autoVersion: autoVersion,
+      invocationIndex: index,
+      previousResult: previous,
+    );
+    final tracked = future.then<Object?>((value) => value);
+    _activeSteps.add(tracked);
+    tracked.then<void>(
+      (_) => _activeSteps.remove(tracked),
+      onError: (Object _, StackTrace __) => _activeSteps.remove(tracked),
+    );
+    return future;
+  }
+
+  @override
+  Future<Map<String, T>> parallel<T>(
+    Map<String, Future<T> Function(WorkflowScriptContext)> branches,
+  ) async {
+    final entries = branches.entries.toList(growable: false);
+    final values = await Future.wait(
+      entries.map((entry) => Future.sync(() => entry.value(this))),
+      eagerError: false,
+    );
+    return <String, T>{
+      for (var index = 0; index < entries.length; index++)
+        entries[index].key: values[index],
+    };
+  }
 
   @override
   Future<T> stepWithRetry<T>(
@@ -2283,13 +2318,43 @@ class _WorkflowScriptExecution
     required WorkflowRetryPolicy retryPolicy,
     bool autoVersion = false,
     WorkflowCompensationRegistration? Function(T result)? compensationForResult,
-  }) => _step(
-    name,
-    handler,
-    autoVersion: autoVersion,
-    retryPolicy: retryPolicy,
-    compensationForResult: compensationForResult,
-  );
+  }) {
+    final index = _stepIndex++;
+    final previous = _previousResult;
+    final future = _step(
+      name,
+      handler,
+      autoVersion: autoVersion,
+      retryPolicy: retryPolicy,
+      compensationForResult: compensationForResult,
+      invocationIndex: index,
+      previousResult: previous,
+    );
+    final tracked = future.then<Object?>((value) => value);
+    _activeSteps.add(tracked);
+    tracked.then<void>(
+      (_) => _activeSteps.remove(tracked),
+      onError: (Object _, StackTrace __) => _activeSteps.remove(tracked),
+    );
+    return future;
+  }
+
+  /// Waits for all handlers admitted by this script invocation.
+  ///
+  /// This is intentionally a drain, rather than cancellation: Dart futures
+  /// cannot cancel arbitrary user handlers, and finalizing a run while a
+  /// sibling is still persisting would corrupt its journal.
+  Future<void> drainSteps() async {
+    while (_activeSteps.isNotEmpty) {
+      final pending = List<Future<Object?>>.of(_activeSteps);
+      await Future.wait(
+        pending.map(
+          (future) => future.catchError((Object _, StackTrace __) => null),
+        ),
+        eagerError: false,
+      );
+    }
+  }
 
   Future<T> _step<T>(
     String name,
@@ -2297,6 +2362,8 @@ class _WorkflowScriptExecution
     bool autoVersion = false,
     WorkflowRetryPolicy? retryPolicy,
     WorkflowCompensationRegistration? Function(T result)? compensationForResult,
+    required int invocationIndex,
+    required Object? previousResult,
   }) async {
     /// Executes a script checkpoint with replay and suspension handling.
     _lastStepName = name;
@@ -2366,7 +2433,6 @@ class _WorkflowScriptExecution
       } else {
         _completedIterations[name] = 1;
       }
-      _stepIndex += 1;
       await runtime._extendLeases(taskContext, runId, executionClaim);
       return decodedCached as T;
     }
@@ -2380,13 +2446,14 @@ class _WorkflowScriptExecution
     final stepMeta = runtime._stepMeta(
       runState: runState,
       stepName: name,
-      stepIndex: _stepIndex,
+      stepIndex: invocationIndex,
       iteration: iteration,
     );
     final stepContext = _WorkflowScriptStepContextImpl(
       execution: this,
       stepName: name,
-      stepIndex: _stepIndex,
+      stepIndex: invocationIndex,
+      previousResult: previousResult,
       iteration: iteration,
       resumeData: resumeData,
       isResuming: isResuming,
@@ -2429,7 +2496,6 @@ class _WorkflowScriptExecution
             attempt.entry.data['value'];
         _previousResult = replayed;
         _completedIterations[name] = autoVersion ? iteration + 1 : 1;
-        _stepIndex += 1;
         return replayed as T;
       }
       if (attempt.state == 'exhausted') {
@@ -2534,7 +2600,6 @@ class _WorkflowScriptExecution
       );
       _completedIterations[name] = autoVersion ? iteration + 1 : 1;
       _previousResult = result;
-      _stepIndex += 1;
       return result;
     }
 
@@ -2596,7 +2661,6 @@ class _WorkflowScriptExecution
       _completedIterations[name] = 1;
     }
     _previousResult = result;
-    _stepIndex += 1;
     return result;
   }
 
@@ -2763,6 +2827,7 @@ class _WorkflowScriptStepContextImpl
     required String stepName,
     required int stepIndex,
     required int iteration,
+    required this.previousResult,
     required this.isResuming,
     required this.isEventTimeout,
     Object? resumeData,
@@ -2777,6 +2842,8 @@ class _WorkflowScriptStepContextImpl
   final String _stepName;
   final int _stepIndex;
   final int _iteration;
+  @override
+  final Object? previousResult;
   _ScriptControl? _control;
   Object? _resumeData;
 
@@ -2873,9 +2940,6 @@ class _WorkflowScriptStepContextImpl
 
   @override
   Map<String, Object?> get params => execution.params;
-
-  @override
-  Object? get previousResult => execution.previousResult;
 
   @override
   /// Returns and clears any resume payload supplied to this step.

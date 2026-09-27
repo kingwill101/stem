@@ -8,6 +8,7 @@ export 'core/workflow_cancellation_policy.dart';
 export 'core/workflow_checkpoint.dart';
 export 'core/workflow_clock.dart';
 export 'core/workflow_compensation.dart';
+export 'core/workflow_concurrent_step.dart';
 export 'core/workflow_definition.dart';
 export 'core/workflow_event_ref.dart';
 export 'core/workflow_execution_context.dart';
