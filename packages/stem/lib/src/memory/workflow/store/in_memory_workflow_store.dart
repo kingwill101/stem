@@ -124,6 +124,7 @@ class InMemoryWorkflowStore
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
+    if (limit <= 0) return const [];
     final resolved = <WorkflowConcurrentStepRecord>[];
     for (final records in _concurrentSteps.values) {
       for (final entry in records.entries) {
@@ -177,6 +178,7 @@ class InMemoryWorkflowStore
     int limit = 256,
     String? runId,
   }) async {
+    if (limit <= 0) return const [];
     final resolved = <WorkflowConcurrentStepRecord>[];
     for (final records in _concurrentSteps.values) {
       for (final entry in records.entries) {
@@ -269,10 +271,10 @@ class InMemoryWorkflowStore
                   record.status != WorkflowConcurrentStepStatus.failed),
         )
         .toList();
-    if (unfinished.isEmpty ||
-        unfinished.any(
-          (record) => record.status != WorkflowConcurrentStepStatus.suspended,
-        )) {
+    if (unfinished.isEmpty) return state;
+    if (unfinished.any(
+      (record) => record.status != WorkflowConcurrentStepStatus.suspended,
+    )) {
       return state.copyWith(
         status: WorkflowStatus.running,
         waitTopic: null,

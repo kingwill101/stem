@@ -886,7 +886,7 @@ class SqliteWorkflowStore
         }
       }
     }
-    if (children.isEmpty) {
+    if (!hasUnfinished) {
       await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
@@ -1589,6 +1589,7 @@ class SqliteWorkflowStore
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
+    if (limit <= 0) return const [];
     return _connections.runInTransaction((ctx) async {
       final rows = await ctx.driver.queryRaw(
         'SELECT c.* FROM wf_concurrent_steps c '
@@ -1668,6 +1669,7 @@ class SqliteWorkflowStore
     int limit = 256,
     String? runId,
   }) async {
+    if (limit <= 0) return const [];
     return _connections.runInTransaction((ctx) async {
       final rows = await ctx.driver.queryRaw(
         'SELECT c.* FROM wf_concurrent_steps c '

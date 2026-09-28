@@ -393,71 +393,104 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   /// Emits an external event and resumes all runs waiting on [topic].
   ///
   /// Each resumed run receives the event as `resumeData` for the awaiting step
-  /// before being re-enqueued.
+  /// before being re-enqueued. Child batches are resolved before publishing one
+  /// continuation per run. Publication failures do not skip other ready runs.
   Future<void> emit(String topic, Map<String, Object?> payload) async {
     await _eventBus.emit(topic, payload);
     const batchSize = 256;
+    final pending = <String, RunState>{};
+    final excluded = <String>{};
+    (Object, StackTrace)? failure;
+
+    Future<void> consider(
+      String runId,
+      Map<String, Object?>? suspensionData,
+    ) async {
+      if (excluded.contains(runId)) return;
+      try {
+        final state = pending[runId] ?? await _store.get(runId);
+        if (state == null || state.isTerminal) {
+          pending.remove(runId);
+          excluded.add(runId);
+          return;
+        }
+        if (await _maybeCancelForPolicy(
+          state.copyWith(
+            status: WorkflowStatus.suspended,
+            suspensionData: suspensionData,
+          ),
+          now: _clock.now(),
+        )) {
+          pending.remove(runId);
+          excluded.add(runId);
+          return;
+        }
+        pending[runId] = state;
+      } on Object catch (error, stack) {
+        failure ??= (error, stack);
+      }
+    }
+
     final concurrentStore = _store is WorkflowConcurrentStore
         ? _store as WorkflowConcurrentStore
         : null;
     if (concurrentStore != null) {
-      while (true) {
-        final records = await concurrentStore.resolveConcurrentEvents(
-          topic,
-          payload,
-        );
-        if (records.isEmpty) break;
-        for (final record in records) {
-          final state = await _store.get(record.runId);
-          if (state == null || state.isTerminal) continue;
-          if (await _maybeCancelForPolicy(
-            state.copyWith(
-              status: WorkflowStatus.suspended,
-              suspensionData: record.suspensionData,
-            ),
-            now: _clock.now(),
-          )) {
-            continue;
-          }
-          await _enqueueRun(
-            record.runId,
-            workflow: state.workflow,
-            continuation: true,
-            reason: WorkflowContinuationReason.event,
-            runtimeMetadata: state.runtimeMetadata,
+      try {
+        while (true) {
+          final records = await concurrentStore.resolveConcurrentEvents(
+            topic,
+            payload,
+            // Batch termination must use the same limit for custom adapters.
+            // ignore: avoid_redundant_argument_values
+            limit: batchSize,
           );
+          for (final record in records) {
+            await consider(record.runId, record.suspensionData);
+          }
+          if (records.length < batchSize) break;
         }
-        if (records.length < batchSize) break;
+      } on Object catch (error, stack) {
+        failure ??= (error, stack);
       }
     }
-    while (true) {
-      final resolutions = await _store.resolveWatchers(
-        topic,
-        payload,
-      );
-      if (resolutions.isEmpty) {
-        break;
-      }
-      for (final resolution in resolutions) {
-        final state = await _store.get(resolution.runId);
-        if (state == null) {
-          continue;
+    try {
+      while (true) {
+        final resolutions = await _store.resolveWatchers(
+          topic,
+          payload,
+          // Batch termination must use the same limit for custom adapters.
+          // ignore: avoid_redundant_argument_values
+          limit: batchSize,
+        );
+        for (final resolution in resolutions) {
+          await consider(resolution.runId, resolution.resumeData);
         }
-        final now = _clock.now();
-        if (await _maybeCancelForPolicy(state, now: now)) {
+        if (resolutions.length < batchSize) break;
+      }
+    } on Object catch (error, stack) {
+      failure ??= (error, stack);
+    }
+    // Resolve all child batches before publishing, not just the first batch
+    // containing a run. Each affected run receives at most one continuation.
+    for (final runId in pending.keys) {
+      try {
+        final state = await _store.get(runId);
+        if (state == null || state.status != WorkflowStatus.running) {
           continue;
         }
         await _enqueueRun(
-          resolution.runId,
+          runId,
           workflow: state.workflow,
           continuation: true,
           reason: WorkflowContinuationReason.event,
           runtimeMetadata: state.runtimeMetadata,
         );
+      } on Object catch (error, stack) {
+        failure ??= (error, stack);
       }
-      if (resolutions.length < batchSize) {
-        break;
-      }
+    }
+    if (failure != null) {
+      Error.throwWithStackTrace(failure!.$1, failure!.$2);
     }
   }
 

@@ -222,6 +222,7 @@ abstract interface class WorkflowConcurrentStore {
   /// Resolves event waits independently, buffering one payload per invocation.
   ///
   /// The limit counts matching active waits, not unrelated candidate records.
+  /// A non-positive limit does not resolve or mutate any waits.
   /// Events are broadcast to already registered waits; this is not an inbox
   /// for events emitted before a watcher is registered.
   Future<List<WorkflowConcurrentStepRecord>> resolveConcurrentEvents(
@@ -234,6 +235,7 @@ abstract interface class WorkflowConcurrentStore {
   ///
   /// Event deadlines set `resumeReason: eventDeadline`. Only due, active waits
   /// count against [limit]; a future timer cannot hide another due timer.
+  /// A non-positive limit does not resolve or mutate any waits.
   Future<List<WorkflowConcurrentStepRecord>> resumeDueConcurrentSteps(
     DateTime now, {
     int limit = 256,

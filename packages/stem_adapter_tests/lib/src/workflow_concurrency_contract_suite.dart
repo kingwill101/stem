@@ -738,6 +738,104 @@ void _registerTests(WorkflowStoreContractFactory factory) {
     });
   }
 
+  for (final limit in [0, -1]) {
+    test('resolution limit $limit leaves waiting records untouched', () async {
+      runtime.registerWorkflow(
+        WorkflowScript(
+          name: 'resolution.limit',
+          run: (script) => script.step(
+            'wait',
+            (step) => step.waitForEvent<Map<String, Object?>>(
+              topic: 'resolution.limit',
+              deadline: clock.now().add(const Duration(seconds: 1)),
+            ),
+          ),
+        ).definition,
+      );
+      final id = await runtime.startWorkflow('resolution.limit');
+      await runtime.executeRun(id);
+      clock.advance(const Duration(seconds: 1));
+      final concurrent = store as WorkflowConcurrentStore;
+      expect(
+        await concurrent.resolveConcurrentEvents(
+          'resolution.limit',
+          const {'unexpected': true},
+          limit: limit,
+        ),
+        isEmpty,
+      );
+      expect(
+        await concurrent.resumeDueConcurrentSteps(clock.now(), limit: limit),
+        isEmpty,
+      );
+      expect(
+        (await concurrent.listConcurrentSteps(id)).single.status,
+        WorkflowConcurrentStepStatus.suspended,
+      );
+      expect((await store.get(id))!.status, WorkflowStatus.suspended);
+    });
+  }
+
+  for (final explicit in [false, true]) {
+    for (final event in [false, true]) {
+      test('preserve legacy wait: explicit=$explicit event=$event', () async {
+        final id = await store.createRun(workflow: 'legacy.wait', params: {});
+        final fenced = store as FencedWorkflowStore;
+        final concurrent = store as WorkflowConcurrentStore;
+        final claim = (await fenced.claimRunExecution(id, ownerId: 'owner'))!;
+        await concurrent.writeConcurrentStep(
+          WorkflowConcurrentStepRecord(
+            runId: id,
+            invocationId: 'done',
+            branch: '',
+            stepName: 'done',
+            stepIndex: 0,
+            iteration: 0,
+            revision: 1,
+            status: WorkflowConcurrentStepStatus.completed,
+            executionId: claim.executionId,
+            updatedAt: clock.now(),
+            value: 'done',
+          ),
+          executionId: claim.executionId,
+        );
+        final when = clock.now().add(const Duration(minutes: 1));
+        if (event) {
+          await store.registerWatcher(
+            id,
+            'legacy',
+            'legacy.topic',
+            deadline: when,
+            data: const {'step': 'legacy', 'type': 'event'},
+          );
+        } else {
+          await store.suspendUntil(
+            id,
+            'legacy',
+            when,
+            data: const {'step': 'legacy', 'type': 'sleep'},
+          );
+        }
+        final before = (await store.get(id))!;
+        if (explicit) {
+          await concurrent.releaseConcurrentExecution(
+            id,
+            executionId: claim.executionId,
+            suspended: true,
+          );
+        } else {
+          await fenced.releaseRunExecution(id, executionId: claim.executionId);
+        }
+        final after = (await store.get(id))!;
+        expect(after.status, WorkflowStatus.suspended);
+        expect(after.ownerId, isNull);
+        expect(after.resumeAt, before.resumeAt);
+        expect(after.waitTopic, before.waitTopic);
+        expect(after.suspensionData, before.suspensionData);
+      });
+    }
+  }
+
   test('execution outcome settlement fences stale and terminal runs', () async {
     final id = await store.createRun(workflow: 'settlement.fence', params: {});
     final fenced = store as FencedWorkflowStore;

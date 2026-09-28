@@ -974,7 +974,7 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
         }
       }
     }
-    if (children.isEmpty) {
+    if (!hasUnfinished) {
       await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
@@ -1631,6 +1631,7 @@ WHERE namespace = ? AND run_id = ?
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
+    if (limit <= 0) return const [];
     return _connections.runInTransaction((ctx) async {
       final rows = await ctx.driver.queryRaw(
         'SELECT c.* FROM stem_workflow_concurrent_steps c '
@@ -1711,6 +1712,7 @@ WHERE namespace = ? AND run_id = ?
     int limit = 256,
     String? runId,
   }) async {
+    if (limit <= 0) return const [];
     return _connections.runInTransaction((ctx) async {
       final rows = await ctx.driver.queryRaw(
         'SELECT c.* FROM stem_workflow_concurrent_steps c '

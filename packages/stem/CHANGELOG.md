@@ -24,6 +24,9 @@
 - Scope branch idempotency keys and lifecycle identities independently while
   preserving the existing root-scope key format. Attempt every consumed due-run
   candidate before reporting an individual continuation-publication failure.
+- Publish one event continuation per affected run after resolving its child
+  batches, and preserve legacy wait metadata when completed concurrent records
+  are the only remaining children.
 - Prevent suspension user data from replacing runtime-owned routing, identity,
   deadline, or resume-reason metadata in both flows and scripts.
 - Add shared adapter regression coverage and a durable concurrency guide covering

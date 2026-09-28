@@ -2191,6 +2191,7 @@ return 1
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
+    if (limit <= 0) return const [];
     final raw =
         await _send([
           'EVAL',
@@ -2216,6 +2217,7 @@ return 1
     DateTime now, {
     int limit = 256,
   }) async {
+    if (limit <= 0) return const [];
     final raw =
         await _send([
           'EVAL',

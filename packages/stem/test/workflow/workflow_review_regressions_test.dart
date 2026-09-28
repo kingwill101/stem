@@ -71,6 +71,79 @@ void main() {
     expect(broker.attemptedRuns, [first, second, legacy]);
   });
 
+  test('events enqueue each run once after all child batches', () async {
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'review.event-batches',
+        run: (script) => Future.wait([
+          for (var i = 0; i < (script.params['count']! as int); i++)
+            script.step(
+              'wait-$i',
+              (step) => step.waitForEvent<Map<String, Object?>>(
+                topic: 'review.batch-topic',
+              ),
+            ),
+        ]),
+      ).definition,
+    );
+    final first = await runtime.startWorkflow(
+      'review.event-batches',
+      params: const {'count': 257},
+    );
+    await runtime.executeRun(first);
+    final second = await runtime.startWorkflow(
+      'review.event-batches',
+      params: const {'count': 2},
+    );
+    await runtime.executeRun(second);
+    broker
+      ..attemptedRuns.clear()
+      ..beforePublish = (envelope) async {
+        final id = envelope.args['runId']! as String;
+        expect(
+          await store.listConcurrentSteps(id),
+          everyElement(
+            isA<WorkflowConcurrentStepRecord>().having(
+              (record) => record.status,
+              'all waits resolved before publishing',
+              WorkflowConcurrentStepStatus.ready,
+            ),
+          ),
+        );
+      };
+    await runtime.emit('review.batch-topic', const {'ready': true});
+    expect(broker.attemptedRuns, unorderedEquals([first, second]));
+  });
+
+  test('an event publish failure does not skip another ready run', () async {
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'review.event-failure',
+        run: (script) => script.step(
+          'wait',
+          (step) => step.waitForEvent<Map<String, Object?>>(
+            topic: 'review.event-failure',
+          ),
+        ),
+      ).definition,
+    );
+    final ids = <String>[];
+    for (var i = 0; i < 2; i++) {
+      final id = await runtime.startWorkflow('review.event-failure');
+      ids.add(id);
+      await runtime.executeRun(id);
+    }
+    final failure = StateError('event continuation publish failed');
+    broker
+      ..attemptedRuns.clear()
+      ..nextFailure = failure;
+    await expectLater(
+      runtime.emit('review.event-failure', const {'ready': true}),
+      throwsA(same(failure)),
+    );
+    expect(broker.attemptedRuns, unorderedEquals(ids));
+  });
+
   test(
     'legacy stores support sequential and cached steps of each kind',
     () async {
@@ -167,11 +240,13 @@ void main() {
 
 class _FailOnceBroker extends InMemoryBroker {
   StateError? nextFailure;
+  Future<void> Function(Envelope)? beforePublish;
   final attemptedRuns = <String>[];
 
   @override
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
     attemptedRuns.add(envelope.args['runId']! as String);
+    await beforePublish?.call(envelope);
     final failure = nextFailure;
     nextFailure = null;
     if (failure != null) throw failure;
