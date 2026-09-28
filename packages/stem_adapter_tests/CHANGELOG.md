@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0
+
+- Add `runWorkflowConcurrencyContractTests` for raw concurrent checkpoints and
+  isolated named branches across all bundled workflow stores.
+- Cover independent timers/events, runtime recreation, buffered payloads,
+  timeout metadata, nullable checkpoints, scoped names, eager failures, and
+  cancellation policies.
+- Verify multi-run event batches, filtering before resolution limits, resume
+  payload retention after handler failure, revision CAS, and atomic checkpoint
+  projection without partial writes on rejected transitions.
+- Require Stem `>=0.6.0 <1.0.0` for the concurrent workflow contracts.
+
 ## 0.3.1
 
 - Add shared broker coverage for repeated logical task IDs and latest

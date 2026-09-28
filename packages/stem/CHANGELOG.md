@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.0
+
+- Support overlapping named script checkpoints through ordinary `Future.wait`
+  calls and add `WorkflowScriptContext.parallel` with isolated named branch
+  scopes. Handlers remain concurrent rather than being silently serialized.
+- Separate stable, typed `StepInvocationId` identities from invocation ordinals.
+  Capture per-step previous-result snapshots and allocate auto-versioned
+  iterations in invocation order, independently of sibling completion order.
+- Add `WorkflowConcurrentStore` and immutable per-invocation records with
+  execution fencing, revision CAS, and atomic ordinary-checkpoint projection.
+  The bundled memory store implements the capability; persistent adapters add
+  equivalent support in their 0.4.0 releases.
+- Persist independent sleeps, event waits, deadlines, and delivered payloads.
+  Preserve completed null results and resume payloads across retries without
+  replaying completed siblings or restarting their timers.
+- Drain admitted checkpoint and branch work before releasing an execution,
+  including eager-error joins. Preserve actual sibling failures when another
+  branch suspends, and enforce cancellation policies on concurrent resumptions.
+- Add shared adapter regression coverage and a durable concurrency guide covering
+  replay, branch identity, storage contracts, and upgrade requirements.
+- **Migration for custom implementers:** implement the new `parallel` method on
+  custom `WorkflowScriptContext` implementations. Custom stores need
+  `WorkflowConcurrentStore` plus `FencedWorkflowStore` for concurrent execution;
+  stores without the capability retain sequential execution and reject overlap.
+- **Deployment:** existing sequential checkpoint data remains readable. Upgrade
+  all participating workers before creating concurrent runs; old workers cannot
+  interpret per-invocation wait state. External side effects remain at-least-once
+  and must be idempotent.
+
 ## 0.5.1
 
 - Define latest-terminal-delivery retention for repeated logical task IDs in

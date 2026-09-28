@@ -182,6 +182,10 @@ incompatible code changes on startup.
 
 ## Durable action retries
 
+For script-level fan-out and independent durable waits, see
+[Durable script concurrency](workflow_concurrency.md). Raw concurrent named
+steps and explicit named branch scopes use the same runtime persistence model.
+
 The host is an authoring layer over the existing workflow runtime, not another
 execution engine. Ordinary and journaled actions share checkpoint persistence.
 The historical `workflow_host_prototype` example now uses this same core host.

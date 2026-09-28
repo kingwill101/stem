@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Require Stem `>=0.6.0 <1.0.0`, `stem_flutter >=0.5.0 <1.0.0`, and
+  `stem_sqlite >=0.4.0 <1.0.0` so Flutter-managed SQLite runtimes use the
+  concurrent-checkpoint schema and storage implementation.
+- Existing database opening applies the SQLite migration registry. Upgrade all
+  workers sharing a database before submitting concurrent workflows.
+
 ## 0.4.0
 
 - Require Dart `>=3.13.0 <4.0.0` through a compatible Flutter SDK.

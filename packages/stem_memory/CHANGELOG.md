@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Require Stem `>=0.6.0 <1.0.0` so the re-exported in-memory workflow store
+  provides per-invocation concurrency, independent waits, execution/revision
+  fencing, and atomic checkpoint projection.
+- Align the shared adapter-contract dependency with `>=0.4.0 <1.0.0`.
+  In-memory state remains process-local and is not durable across process exits.
+
 ## 0.3.0
 
 - Require Dart `>=3.13.0 <4.0.0`.

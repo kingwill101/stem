@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- Implement `WorkflowConcurrentStore` with per-invocation records and Lua-atomic
+  execution fencing, revision CAS, and ordinary-checkpoint projection.
+- Keep event payloads and timer deadlines independent across siblings; wake every
+  matching run in a resolution batch and preserve event-timeout metadata.
+- Encode topic/due index members as unambiguous run/invocation pairs, including
+  caller-supplied run IDs containing delimiters.
+- Atomically aggregate child readiness on lease release and clean concurrent
+  records/indexes inside completion, cancellation, terminal-failure, and valid
+  rewind transitions. Retain compatibility with legacy watcher/resume APIs.
+- Require Stem `>=0.6.0 <1.0.0` and adapter contracts `>=0.4.0 <1.0.0`.
+  Upgrade participating workers together before submitting concurrent runs.
+
 ## 0.3.1
 
 - Replace an earlier dead-letter record when the same logical task ID is

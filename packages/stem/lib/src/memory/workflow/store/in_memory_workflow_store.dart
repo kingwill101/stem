@@ -5,8 +5,8 @@ import 'dart:collection';
 
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
-import 'package:stem/src/workflow/core/workflow_concurrent_step.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_concurrent_step.dart';
 import 'package:stem/src/workflow/core/workflow_journal.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_step_entry.dart';
@@ -81,32 +81,39 @@ class InMemoryWorkflowStore
   @override
   Future<WorkflowConcurrentStepRecord> writeConcurrentStep(
     WorkflowConcurrentStepRecord record, {
-    int? expectedRevision,
     required String executionId,
+    int? expectedRevision,
+    String? checkpointName,
   }) async {
     final run = _runs[record.runId];
     if (run == null) throw StateError('Unknown workflow run ${record.runId}.');
     if (executionId.isEmpty ||
         record.executionId != executionId ||
         run.executionId != executionId ||
+        run.ownerId == null ||
+        _leaseExpired(run, _clock.now()) ||
         (run.status != WorkflowStatus.running &&
             run.status != WorkflowStatus.suspended)) {
       throw StateError('Concurrent checkpoint execution fence mismatch.');
     }
     final records = _concurrentSteps.putIfAbsent(record.runId, () => {});
     final previous = records[record.invocationId];
-    if (expectedRevision != null &&
-        (previous?.revision ?? 0) != expectedRevision) {
-      throw StateError('Concurrent checkpoint revision conflict.');
-    }
-    if (previous?.status == WorkflowConcurrentStepStatus.completed) {
-      throw StateError('Completed concurrent checkpoint is immutable.');
-    }
-    if (previous != null && record.revision <= previous.revision) {
-      throw StateError('Concurrent checkpoint revision must increase.');
-    }
+    record.validateTransition(
+      previous,
+      expectedRevision: expectedRevision,
+      checkpointName: checkpointName,
+    );
     records[record.invocationId] = record;
-    _runs[record.runId] = run.copyWith(updatedAt: _clock.now());
+    if (checkpointName != null) {
+      _steps.putIfAbsent(record.runId, LinkedHashMap.new)[checkpointName] =
+          record.value;
+    }
+    _runs[record.runId] = run.copyWith(
+      status: WorkflowStatus.running,
+      waitTopic: null,
+      resumeAt: null,
+      updatedAt: _clock.now(),
+    );
     _notifyRunChanged(record.runId);
     return record;
   }
@@ -128,21 +135,31 @@ class InMemoryWorkflowStore
             (run.status != WorkflowStatus.running &&
                 run.status != WorkflowStatus.suspended) ||
             current.status != WorkflowConcurrentStepStatus.suspended ||
-            suspension?['topic'] != topic) continue;
+            suspension?['topic'] != topic) {
+          continue;
+        }
         final next = WorkflowConcurrentStepRecord(
-          runId: current.runId, invocationId: current.invocationId,
-          branch: current.branch, stepName: current.stepName,
-          stepIndex: current.stepIndex, iteration: current.iteration,
+          runId: current.runId,
+          invocationId: current.invocationId,
+          branch: current.branch,
+          stepName: current.stepName,
+          stepIndex: current.stepIndex,
+          iteration: current.iteration,
           revision: current.revision + 1,
           status: WorkflowConcurrentStepStatus.ready,
-          executionId: current.executionId, value: current.value,
+          executionId: current.executionId,
+          value: current.value,
           suspensionData: <String, Object?>{
-            ...?suspension, 'payload': Map<String, Object?>.from(payload),
+            ...?suspension,
+            'payload': Map<String, Object?>.from(payload),
           },
-          error: current.error, stack: current.stack, updatedAt: _clock.now(),
+          error: current.error,
+          stack: current.stack,
+          updatedAt: _clock.now(),
         );
         records[entry.key] = next;
         resolved.add(next);
+        _markConcurrentReady(current.runId);
         _notifyRunChanged(current.runId);
       }
     }
@@ -153,12 +170,19 @@ class InMemoryWorkflowStore
   Future<List<WorkflowConcurrentStepRecord>> resumeDueConcurrentSteps(
     DateTime now, {
     int limit = 256,
+  }) => _resumeDueConcurrentSteps(now, limit: limit);
+
+  Future<List<WorkflowConcurrentStepRecord>> _resumeDueConcurrentSteps(
+    DateTime now, {
+    int limit = 256,
+    String? runId,
   }) async {
     final resolved = <WorkflowConcurrentStepRecord>[];
     for (final records in _concurrentSteps.values) {
       for (final entry in records.entries) {
         if (resolved.length >= limit) break;
         final current = entry.value;
+        if (runId != null && current.runId != runId) continue;
         final data = current.suspensionData;
         final raw = data?['dueAt'] ?? data?['resumeAt'] ?? data?['deadline'];
         final due = raw is String ? DateTime.tryParse(raw) : null;
@@ -167,19 +191,33 @@ class InMemoryWorkflowStore
             (run.status != WorkflowStatus.running &&
                 run.status != WorkflowStatus.suspended) ||
             current.status != WorkflowConcurrentStepStatus.suspended ||
-            due == null || due.isAfter(now)) continue;
+            due == null ||
+            due.isAfter(now)) {
+          continue;
+        }
         final next = WorkflowConcurrentStepRecord(
-          runId: current.runId, invocationId: current.invocationId,
-          branch: current.branch, stepName: current.stepName,
-          stepIndex: current.stepIndex, iteration: current.iteration,
+          runId: current.runId,
+          invocationId: current.invocationId,
+          branch: current.branch,
+          stepName: current.stepName,
+          stepIndex: current.stepIndex,
+          iteration: current.iteration,
           revision: current.revision + 1,
           status: WorkflowConcurrentStepStatus.ready,
-          executionId: current.executionId, value: current.value,
-          suspensionData: data, error: current.error, stack: current.stack,
+          executionId: current.executionId,
+          value: current.value,
+          suspensionData: {
+            ...?data,
+            if (data?['type'] == 'event') 'resumeReason': 'eventDeadline',
+            if (data?['type'] == 'sleep') 'payload': data?['payload'] ?? true,
+          },
+          error: current.error,
+          stack: current.stack,
           updatedAt: _clock.now(),
         );
         records[entry.key] = next;
         resolved.add(next);
+        _markConcurrentReady(current.runId);
         _notifyRunChanged(current.runId);
       }
     }
@@ -197,6 +235,65 @@ class InMemoryWorkflowStore
   Future<void> clearConcurrentSteps(String runId) async {
     _concurrentSteps.remove(runId);
     _notifyRunChanged(runId);
+  }
+
+  void _markConcurrentReady(String runId) {
+    final state = _runs[runId];
+    if (state == null || state.isTerminal) return;
+    // Delivering a wakeup must not invalidate an executing sibling's lease.
+    _runs[runId] = state.copyWith(
+      status: WorkflowStatus.running,
+      waitTopic: null,
+      resumeAt: null,
+      updatedAt: _clock.now(),
+    );
+  }
+
+  DateTime? _concurrentDueAt(WorkflowConcurrentStepRecord record) {
+    final data = record.suspensionData;
+    final raw = data?['dueAt'] ?? data?['resumeAt'] ?? data?['deadline'];
+    return raw is String ? DateTime.tryParse(raw) : null;
+  }
+
+  RunState _projectConcurrentWaits(RunState state) {
+    final records = _concurrentSteps[state.id];
+    if (state.isTerminal || records == null || records.isEmpty) return state;
+    final unfinished = records.values
+        .where(
+          (record) => record.status != WorkflowConcurrentStepStatus.completed,
+        )
+        .toList();
+    if (unfinished.isEmpty ||
+        unfinished.any(
+          (record) => record.status != WorkflowConcurrentStepStatus.suspended,
+        )) {
+      return state.copyWith(
+        status: WorkflowStatus.running,
+        waitTopic: null,
+        resumeAt: null,
+        suspensionData: const <String, Object?>{},
+      );
+    }
+    unfinished.sort((a, b) {
+      final left = _concurrentDueAt(a);
+      final right = _concurrentDueAt(b);
+      if (left == null) return right == null ? 0 : 1;
+      if (right == null) return -1;
+      return left.compareTo(right);
+    });
+    final first = unfinished.first;
+    return state.copyWith(
+      status: WorkflowStatus.suspended,
+      waitTopic: first.suspensionData?['topic'] as String?,
+      resumeAt: _concurrentDueAt(first),
+      suspensionData: first.suspensionData,
+    );
+  }
+
+  void _removeConcurrentWaits(String runId) {
+    _concurrentSteps[runId]?.removeWhere(
+      (_, record) => record.status != WorkflowConcurrentStepStatus.completed,
+    );
   }
 
   @override
@@ -562,6 +659,7 @@ class InMemoryWorkflowStore
     final state = _runs[runId];
     if (state == null || state.isTerminal) return false;
     _removeWatcherForRun(runId);
+    _removeConcurrentWaits(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.completed,
       result: result,
@@ -610,6 +708,7 @@ class InMemoryWorkflowStore
   @override
   /// Marks a run as resumed, optionally merging resume data.
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
+    await _resumeDueConcurrentSteps(_clock.now(), runId: runId);
     final state = _runs[runId];
     if (state == null || state.isTerminal) return;
     _removeWatcherForRun(runId);
@@ -640,6 +739,20 @@ class InMemoryWorkflowStore
   /// Returns run ids that are due to execute at [now].
   Future<List<String>> dueRuns(DateTime now, {int limit = 256}) async {
     final ids = <String>[];
+    if (limit <= 0) return ids;
+    for (final records in _concurrentSteps.values) {
+      for (final record in records.values) {
+        if (ids.length >= limit) return ids;
+        final due = _concurrentDueAt(record);
+        if (record.status == WorkflowConcurrentStepStatus.suspended &&
+            due != null &&
+            !due.isAfter(now) &&
+            !(_runs[record.runId]?.isTerminal ?? true) &&
+            !ids.contains(record.runId)) {
+          ids.add(record.runId);
+        }
+      }
+    }
     final toRemove = <DateTime>[];
     for (final entry in _due.entries) {
       if (entry.key.isAfter(now)) break;
@@ -740,7 +853,7 @@ class InMemoryWorkflowStore
   }) async {
     final state = _runs[runId];
     if (state == null || state.executionId != executionId) return;
-    _runs[runId] = state.copyWith(
+    _runs[runId] = _projectConcurrentWaits(state).copyWith(
       ownerId: null,
       leaseExpiresAt: null,
       updatedAt: _clock.now(),
@@ -840,11 +953,24 @@ class InMemoryWorkflowStore
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
+    final concurrent = await resolveConcurrentEvents(
+      topic,
+      payload,
+      limit: limit,
+    );
+    final results = [
+      for (final record in concurrent)
+        WorkflowWatcherResolution(
+          runId: record.runId,
+          stepName: record.stepName,
+          topic: topic,
+          resumeData: record.suspensionData ?? const {},
+        ),
+    ];
     final topicMap = _watchersByTopic[topic];
-    if (topicMap == null || topicMap.isEmpty) return const [];
+    if (topicMap == null || topicMap.isEmpty) return results;
     final now = _clock.now();
     final ids = topicMap.keys.take(limit).toList(growable: false);
-    final results = <WorkflowWatcherResolution>[];
     for (final runId in ids) {
       final record = topicMap.remove(runId);
       if (record == null) continue;
@@ -905,10 +1031,31 @@ class InMemoryWorkflowStore
     int limit = 256,
   }) async {
     final topicMap = _watchersByTopic[topic];
-    if (topicMap == null || topicMap.isEmpty) return const [];
     final results = <WorkflowWatcher>[];
-    for (final record in topicMap.values.take(limit)) {
+    for (final record in (topicMap?.values ?? const <_WatcherRecord>[]).take(
+      limit,
+    )) {
       results.add(record.toWatcher());
+    }
+    for (final records in _concurrentSteps.values) {
+      for (final record in records.values) {
+        if (results.length >= limit) return results;
+        if (record.status != WorkflowConcurrentStepStatus.suspended ||
+            record.suspensionData?['topic'] != topic ||
+            (_runs[record.runId]?.isTerminal ?? true)) {
+          continue;
+        }
+        results.add(
+          WorkflowWatcher(
+            runId: record.runId,
+            stepName: record.stepName,
+            topic: topic,
+            createdAt: record.updatedAt,
+            deadline: _concurrentDueAt(record),
+            data: record.suspensionData ?? const {},
+          ),
+        );
+      }
     }
     return results;
   }
@@ -924,6 +1071,7 @@ class InMemoryWorkflowStore
     final state = _runs[runId];
     if (state == null || state.isTerminal) return false;
     _removeWatcherForRun(runId);
+    _removeConcurrentWaits(runId);
     final now = _clock.now();
     final cancellationData = <String, Object?>{
       'reason': reason ?? 'cancelled',
@@ -960,7 +1108,6 @@ class InMemoryWorkflowStore
     if (steps == null) return;
     final state = _runs[runId];
     if (state == null) return;
-    _removeWatcherForRun(runId);
     final entries = steps.entries.toList();
     final baseIndexMap = <String, int>{};
     var nextIndex = 0;
@@ -973,6 +1120,11 @@ class InMemoryWorkflowStore
     final targetIndex = baseIndexMap[stepName];
     if (targetIndex == null) {
       return;
+    }
+    _removeWatcherForRun(runId);
+    _concurrentSteps.remove(runId);
+    for (final ids in _due.values) {
+      ids.remove(runId);
     }
     final retained = <MapEntry<String, Object?>>[];
     for (var i = 0; i < entries.length; i++) {
@@ -995,6 +1147,8 @@ class InMemoryWorkflowStore
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.suspended,
       cursor: targetIndex,
+      resumeAt: null,
+      waitTopic: null,
       executionId: null,
       ownerId: null,
       leaseExpiresAt: null,

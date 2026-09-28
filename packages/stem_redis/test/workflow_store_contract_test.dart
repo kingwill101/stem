@@ -25,6 +25,10 @@ void main() {
     },
   );
   runWorkflowStoreContractTests(adapterName: 'redis', factory: redisFactory);
+  runWorkflowConcurrencyContractTests(
+    adapterName: 'redis',
+    factory: redisFactory,
+  );
   runWorkflowTerminalContractTests(
     adapterName: 'redis',
     factory: redisFactory,

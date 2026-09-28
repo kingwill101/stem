@@ -28,6 +28,10 @@ void main() {
     adapterName: 'postgres',
     factory: postgresFactory,
   );
+  runWorkflowConcurrencyContractTests(
+    adapterName: 'postgres',
+    factory: postgresFactory,
+  );
   runWorkflowTerminalContractTests(
     adapterName: 'postgres',
     factory: postgresFactory,

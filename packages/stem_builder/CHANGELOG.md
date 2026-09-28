@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Require Stem `>=0.6.0 <1.0.0`, aligning generated workflows and tasks with
+  the durable concurrent-checkpoint release.
+- Generated registry and codec formats are unchanged.
+
 ## 0.4.0
 
 - Ship a package skill for generated tasks, workflows, and explicit codec bindings.

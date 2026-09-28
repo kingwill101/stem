@@ -12,6 +12,7 @@ import 'package:stem_postgres/src/database/migrations/m_20260819100000_add_rate_
 import 'package:stem_postgres/src/database/migrations/m_20260820110000_add_lock_fencing_tokens.dart';
 import 'package:stem_postgres/src/database/migrations/m_20260820120000_add_workflow_execution_fencing.dart';
 import 'package:stem_postgres/src/database/migrations/m_20260820130000_add_workflow_journal.dart';
+import 'package:stem_postgres/src/database/migrations/m_20260821000000_create_workflow_concurrent_steps.dart';
 
 final List<MigrationEntry> _entries = [
   // <ORM-MIGRATION-REGISTRY>
@@ -67,6 +68,13 @@ final List<MigrationEntry> _entries = [
       'm_20260820130000_add_workflow_journal',
     ),
     migration: const AddWorkflowJournal(),
+  ),
+  MigrationEntry(
+    id: MigrationId(
+      DateTime(2026, 8, 21),
+      'm_20260821000000_create_workflow_concurrent_steps',
+    ),
+    migration: const CreateWorkflowConcurrentSteps(),
   ),
 ];
 

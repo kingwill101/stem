@@ -183,6 +183,21 @@ abstract interface class WorkflowRunChanges {
 /// atomically and reject stale `executionId`/`revision` values. In particular,
 /// event and timer resolution must transition each matching child independently
 /// and retain its payload; they must never overwrite a sibling's suspension.
+///
+/// This capability requires [FencedWorkflowStore]. Writes validate the current,
+/// unexpired run execution claim, not just the token copied into the record.
+/// Revision one inserts a new invocation; every mutation advances by one.
+///
+/// A child suspension does not release the parent execution lease. On release,
+/// stores atomically project the outstanding children onto the run: ready,
+/// running, pending, or failed children keep it runnable; only suspended
+/// children leave it suspended at the earliest remaining deadline. Terminal
+/// run states are never changed by that projection.
+///
+/// Resolving a child atomically makes its parent runnable without invalidating
+/// a currently executing sibling's lease. Ready records remain discoverable
+/// even if enqueueing a continuation fails. The singleton fields on [RunState]
+/// are a diagnostic projection, never the source of a child's resume payload.
 abstract interface class WorkflowConcurrentStore {
   /// Reads one invocation, or `null` when it has not been admitted.
   Future<WorkflowConcurrentStepRecord?> readConcurrentStep(
@@ -191,21 +206,33 @@ abstract interface class WorkflowConcurrentStore {
   );
 
   /// Inserts or advances a record using its expected revision and execution
-  /// fence. A completed record is immutable.
+  /// fence. A completed record is immutable. A null or zero [expectedRevision]
+  /// means insert only; otherwise it must match the stored revision.
+  ///
+  /// When supplied, [checkpointName] atomically projects a completed value into
+  /// the ordinary checkpoint view. It must not be a separate unfenced write.
   Future<WorkflowConcurrentStepRecord> writeConcurrentStep(
     WorkflowConcurrentStepRecord record, {
-    int? expectedRevision,
     required String executionId,
+    int? expectedRevision,
+    String? checkpointName,
   });
 
   /// Resolves event waits independently, buffering one payload per invocation.
+  ///
+  /// The limit counts matching active waits, not unrelated candidate records.
+  /// Events are broadcast to already registered waits; this is not an inbox
+  /// for events emitted before a watcher is registered.
   Future<List<WorkflowConcurrentStepRecord>> resolveConcurrentEvents(
     String topic,
     Map<String, Object?> payload, {
     int limit = 256,
   });
 
-  /// Resolves all due sleep/deadline waits independently.
+  /// Resolves due sleep/deadline waits independently, preserving their metadata.
+  ///
+  /// Event deadlines set `resumeReason: eventDeadline`. Only due, active waits
+  /// count against [limit]; a future timer cannot hide another due timer.
   Future<List<WorkflowConcurrentStepRecord>> resumeDueConcurrentSteps(
     DateTime now, {
     int limit = 256,

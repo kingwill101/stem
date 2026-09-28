@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- Implement `WorkflowConcurrentStore` with independently persisted checkpoint
+  invocations, row-locked execution/revision checks, immutable completed values,
+  and atomic ordinary-checkpoint projection.
+- Add the concurrent-checkpoint table migration and verify upgrades from every
+  historical schema prefix.
+- Resolve each matching event or due timer independently, retain sibling resume
+  payloads, and filter eligible waits before applying batch limits.
+- Aggregate child readiness when releasing an execution without reviving
+  terminal runs. Preserve legacy watcher/resume APIs and clear concurrent
+  records during administrative rewind.
+- Require Stem `>=0.6.0 <1.0.0` and adapter contracts `>=0.4.0 <1.0.0`.
+  Upgrade participating workers together before submitting concurrent runs.
+
 ## 0.3.0
 
 - Require Dart `>=3.13.0 <4.0.0`.
