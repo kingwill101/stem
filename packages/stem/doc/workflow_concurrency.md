@@ -50,10 +50,17 @@ preserves the supplied branch names. Branch completion does not implicitly
 replace the parent scope's previous result; use the returned map for joins.
 
 Branch functions are started even if an earlier branch throws synchronously.
-The join waits for every branch before propagating an error. Ordinary
+The explicit `parallel` join waits for every branch and prefers an uncaught
+branch failure over a sibling's suspension. Multiple failures use declaration
+order; loss of execution ownership takes precedence over application errors.
+Exceptions caught inside a branch remain handled.
+
+Raw futures retain normal Dart semantics. `Future.wait` exposes its first error,
+which may be a suspension before a later sibling error. Use `parallel` when
+failure-over-suspension aggregation is required. An exception already caught by
+workflow code is not raised again merely because a later checkpoint suspends.
 `Future.wait(..., eagerError: true)` may return early to script code, but the
 runtime still drains admitted checkpoint work before leaving that execution.
-An ordinary sibling failure is not hidden by another sibling's suspension.
 
 ## Identity, ordering, and replay
 
@@ -97,6 +104,10 @@ an operator-facing projection, not the authoritative state of every branch.
 While the execution lease is active, a suspended child does not release it.
 Lease release projects remaining child states onto the parent. Resolving a child
 makes the parent runnable without invalidating an active sibling's claim.
+`releaseConcurrentExecution` settles the observed script outcome and releases
+the claim atomically. On suspension, failed checkpoint records remain available
+for diagnostics and replay but do not force the parent into a retry loop.
+An escaping script failure instead leaves an active run runnable for retry.
 
 SQLite and PostgreSQL add a concurrent-checkpoint table through their migration
 registries. Redis uses separate per-run records and topic/timer indexes. Existing
@@ -120,6 +131,9 @@ singleton suspension model.
   siblings is not forcibly interrupting their external operations.
 - A checkpoint has one durable suspension at a time. Put multiple successive
   waits in separate checkpoints.
+- Routing and timing fields in suspension `data` are runtime-owned. User data
+  cannot override checkpoint identity, topics, deadlines, or resume reasons.
+  Put arbitrary data with those names inside `payload` or another nested field.
 - Caller-managed futures that have not yet invoked a checkpoint are not visible
   to the runtime. Await them in the workflow body, or use a structured branch.
 
@@ -129,5 +143,6 @@ singleton suspension model.
 against every built-in store. It covers independent event delivery and timers,
 runtime recreation, simultaneous payload delivery, timeout metadata, null
 results, scoped local names, eager failures, batch wakeups, filtering before
-limits, and revision conflicts. The original shared-state reproductions now
+limits, caught errors, explicit join outcomes, and revision conflicts. The
+original shared-state reproductions now
 assert independent indices, stable result snapshots, and preserved deadlines.

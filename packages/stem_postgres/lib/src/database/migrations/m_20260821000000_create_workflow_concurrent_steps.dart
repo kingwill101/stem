@@ -2,6 +2,7 @@ import 'package:ormed/migrations.dart';
 
 /// Creates durable per-invocation state for concurrent workflow steps.
 class CreateWorkflowConcurrentSteps extends Migration {
+  /// Creates the concurrent-checkpoint schema migration.
   const CreateWorkflowConcurrentSteps();
 
   @override

@@ -18,10 +18,8 @@ void runWorkflowConcurrencyContractTests({
 
 void _registerTests(WorkflowStoreContractFactory factory) {
   late InMemoryBroker broker;
-  WorkflowStore? createdStore;
   late WorkflowStore store;
   late FakeWorkflowClock clock;
-  WorkflowRuntime? createdRuntime;
   late WorkflowRuntime runtime;
 
   WorkflowRuntime createRuntime() {
@@ -36,27 +34,19 @@ void _registerTests(WorkflowStoreContractFactory factory) {
       eventBus: InMemoryEventBus(store),
       clock: clock,
     );
+    addTearDown(result.dispose);
     registry.register(result.workflowRunnerHandler());
-    createdRuntime = result;
     return result;
   }
 
   setUp(() async {
     broker = InMemoryBroker();
+    addTearDown(broker.dispose);
     clock = FakeWorkflowClock(DateTime.utc(2024));
-    createdStore = await factory.create(clock);
-    store = createdStore!;
+    final createdStore = await factory.create(clock);
+    addTearDown(() async => factory.dispose?.call(createdStore));
+    store = createdStore;
     runtime = createRuntime();
-  });
-
-  tearDown(() async {
-    await createdRuntime?.dispose();
-    broker.dispose();
-    if (createdStore != null) {
-      await factory.dispose?.call(createdStore!);
-    }
-    createdStore = null;
-    createdRuntime = null;
   });
 
   for (final reverseDelivery in [false, true]) {
@@ -285,6 +275,53 @@ void _registerTests(WorkflowStoreContractFactory factory) {
     expect(state.result, {'left': 'left-value', 'right': 'right-value'});
     expect(invocations, hasLength(2));
   });
+
+  test(
+    'branch idempotency keys are isolated and stable across replay',
+    () async {
+      final keys = <String, String>{};
+      final definition = WorkflowScript(
+        name: 'parallel.idempotency',
+        run: (script) async {
+          await script.step('load', (step) {
+            keys['root'] = step.idempotencyKey();
+            return 'root';
+          });
+          final result = await script.parallel<String>({
+            for (final name in ['customer', 'inventory'])
+              name: (branch) => branch.step('load', (step) {
+                keys[name] = step.idempotencyKey();
+                keys['$name-custom'] = step.idempotencyKey('custom');
+                return keys[name]!;
+              }),
+          });
+          await script.step(
+            'gate',
+            (step) => step.waitForEvent<Map<String, Object?>>(
+              topic: 'idempotency.continue',
+            ),
+          );
+          return result;
+        },
+      ).definition;
+      runtime.registerWorkflow(definition);
+      final id = await runtime.startWorkflow('parallel.idempotency');
+      await runtime.executeRun(id);
+      expect(keys['root'], 'parallel.idempotency/$id/load');
+      expect(keys.values.toSet(), hasLength(5));
+      final beforeReplay = Map<String, String>.of(keys);
+      await runtime.dispose();
+      runtime = createRuntime()..registerWorkflow(definition);
+      await runtime.emit('idempotency.continue', const {'ready': true});
+      await runtime.executeRun(id);
+      expect((await store.get(id))!.status, WorkflowStatus.completed);
+      expect((await store.get(id))!.result, {
+        'customer': beforeReplay['customer'],
+        'inventory': beforeReplay['inventory'],
+      });
+      expect(keys, beforeReplay);
+    },
+  );
 
   test('parallel starts siblings after a synchronous branch error', () async {
     var siblingStarted = false;
@@ -526,6 +563,414 @@ void _registerTests(WorkflowStoreContractFactory factory) {
     await runtime.executeRun(earlier);
     expect((await store.get(earlier))!.status, WorkflowStatus.completed);
   });
+
+  test(
+    'mixed watcher batches return every transition within the limit',
+    () async {
+      final legacy = await store.createRun(workflow: 'mixed', params: {});
+      await store.registerWatcher(legacy, 'legacy', 'mixed.batch');
+      runtime.registerWorkflow(
+        WorkflowScript(
+          name: 'mixed.concurrent',
+          run: (script) => script.step(
+            'wait',
+            (step) => step.waitForEvent<Map<String, Object?>>(
+              topic: 'mixed.batch',
+            ),
+          ),
+        ).definition,
+      );
+      final current = await runtime.startWorkflow('mixed.concurrent');
+      await runtime.executeRun(current);
+      final first = await store.resolveWatchers(
+        'mixed.batch',
+        const {'value': 1},
+        limit: 1,
+      );
+      expect(first, hasLength(1));
+      expect(await store.listWatchers('mixed.batch'), hasLength(1));
+      final second = await store.resolveWatchers(
+        'mixed.batch',
+        const {'value': 2},
+        limit: 1,
+      );
+      expect(second, hasLength(1));
+      expect(
+        [...first, ...second].map((item) => item.runId),
+        unorderedEquals([legacy, current]),
+      );
+      expect(await store.listWatchers('mixed.batch'), isEmpty);
+    },
+  );
+
+  test('waiting-run lookup filters topics before limiting children', () async {
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'lookup.concurrent',
+        run: (script) => Future.wait([
+          script.step(
+            'other',
+            (step) => step.waitForEvent<Map<String, Object?>>(
+              topic: 'lookup.other',
+            ),
+          ),
+          if (script.params['target'] == true)
+            script.step(
+              'target',
+              (step) => step.waitForEvent<Map<String, Object?>>(
+                topic: 'lookup.target',
+              ),
+            ),
+        ]),
+      ).definition,
+    );
+    final unrelated = await runtime.startWorkflow('lookup.concurrent');
+    await runtime.executeRun(unrelated);
+    clock.advance(const Duration(milliseconds: 1));
+    final target = await runtime.startWorkflow(
+      'lookup.concurrent',
+      params: const {'target': true},
+    );
+    await runtime.executeRun(target);
+    expect(
+      await store.runsWaitingOn('lookup.target', limit: 1),
+      [target],
+    );
+  });
+
+  test('concurrent watcher inspection preserves the deadline', () async {
+    final deadline = clock.now().add(const Duration(minutes: 1));
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'watcher.deadline',
+        run: (script) => script.step(
+          'wait',
+          (step) => step.waitForEvent<Map<String, Object?>>(
+            topic: 'watcher.deadline',
+            deadline: deadline,
+          ),
+        ),
+      ).definition,
+    );
+    final id = await runtime.startWorkflow('watcher.deadline');
+    await runtime.executeRun(id);
+    final watcher = (await store.listWatchers('watcher.deadline')).single;
+    expect(watcher.runId, id);
+    expect(watcher.deadline, deadline);
+  });
+
+  for (final mode in ['event', 'timer', 'manual']) {
+    test('opaque JSON survives $mode resolution and readback', () async {
+      // VM stores must preserve integers outside JavaScript's exact range.
+      // ignore: avoid_js_rounded_ints
+      const largeInteger = 9007199254740993;
+      const opaque = <String, Object?>{
+        'emptyList': <Object?>[],
+        'emptyMap': <String, Object?>{},
+        'largeInteger': largeInteger,
+        'nullable': null,
+        'nested': <Object?>[
+          <Object?>[],
+          <String, Object?>{'items': <Object?>[], 'large': largeInteger},
+        ],
+      };
+      final id = await store.createRun(workflow: 'opaque', params: {});
+      final claim = (await (store as FencedWorkflowStore).claimRunExecution(
+        id,
+        ownerId: 'opaque-owner',
+      ))!;
+      final concurrent = store as WorkflowConcurrentStore;
+      final data = <String, Object?>{
+        'type': mode == 'event' ? 'event' : 'sleep',
+        if (mode == 'event') 'topic': 'opaque.event',
+        if (mode != 'event')
+          'resumeAt': clock
+              .now()
+              .add(const Duration(seconds: 1))
+              .toIso8601String(),
+        'custom': opaque,
+        'payloadRaw': 'user-owned metadata, not a wire encoding',
+        if (mode != 'event') 'payload': opaque,
+      };
+      await concurrent.writeConcurrentStep(
+        WorkflowConcurrentStepRecord(
+          runId: id,
+          invocationId: 'opaque-step',
+          branch: '',
+          stepName: 'wait',
+          stepIndex: 0,
+          iteration: 0,
+          revision: 1,
+          status: WorkflowConcurrentStepStatus.suspended,
+          executionId: claim.executionId,
+          value: opaque,
+          suspensionData: data,
+          updatedAt: clock.now(),
+        ),
+        executionId: claim.executionId,
+      );
+      await (store as FencedWorkflowStore).releaseRunExecution(
+        id,
+        executionId: claim.executionId,
+      );
+      if (mode == 'event') {
+        await concurrent.resolveConcurrentEvents('opaque.event', opaque);
+      } else {
+        clock.advance(const Duration(seconds: 1));
+        if (mode == 'timer') {
+          await concurrent.resumeDueConcurrentSteps(clock.now());
+        } else {
+          final state = (await store.get(id))!;
+          await store.markResumed(id, data: state.suspensionData);
+        }
+      }
+      final record = (await concurrent.readConcurrentStep(id, 'opaque-step'))!;
+      expect(record.status, WorkflowConcurrentStepStatus.ready);
+      expect(record.value, opaque);
+      expect(record.suspensionData?['custom'], opaque);
+      expect(record.suspensionData?['payload'], opaque);
+      expect(
+        record.suspensionData?['payloadRaw'],
+        'user-owned metadata, not a wire encoding',
+      );
+      final payload = record.suspensionData!['payload']! as Map;
+      expect(payload['largeInteger'], isA<int>());
+    });
+  }
+
+  test('execution outcome settlement fences stale and terminal runs', () async {
+    final id = await store.createRun(workflow: 'settlement.fence', params: {});
+    final fenced = store as FencedWorkflowStore;
+    final concurrent = store as WorkflowConcurrentStore;
+    final first = (await fenced.claimRunExecution(id, ownerId: 'first'))!;
+    await concurrent.releaseConcurrentExecution(
+      id,
+      executionId: first.executionId,
+      suspended: false,
+    );
+    final second = (await fenced.claimRunExecution(id, ownerId: 'second'))!;
+    await concurrent.releaseConcurrentExecution(
+      id,
+      executionId: first.executionId,
+      suspended: true,
+    );
+    expect((await store.get(id))!.ownerId, 'second');
+    expect((await store.get(id))!.executionId, second.executionId);
+    await store.cancel(id);
+    await concurrent.releaseConcurrentExecution(
+      id,
+      executionId: second.executionId,
+      suspended: false,
+    );
+    expect((await store.get(id))!.status, WorkflowStatus.cancelled);
+  });
+
+  for (final handling in ['try/catch', 'catchError', 'parallel']) {
+    test('handled failure suspends and resumes with $handling', () async {
+      Future<String> body(WorkflowScriptContext script) async {
+        final failed = script.step<String>(
+          'handled',
+          (_) => throw const FormatException('handled by application'),
+        );
+        if (handling == 'catchError') {
+          await failed.catchError((Object _) => 'fallback');
+        } else {
+          try {
+            await failed;
+          } on FormatException {
+            // This is an application-handled action failure, not a run failure.
+          }
+        }
+        await script.step('wait', (step) async {
+          await step.sleep(const Duration(seconds: 1));
+          return 'slept';
+        });
+        return 'done';
+      }
+
+      runtime.registerWorkflow(
+        WorkflowScript<Object?>(
+          name: 'handled.failure',
+          run: (script) => handling == 'parallel'
+              ? script.parallel<String>({'branch': body})
+              : body(script),
+        ).definition,
+      );
+      final id = await runtime.startWorkflow('handled.failure');
+      await runtime.executeRun(id);
+      expect((await store.get(id))!.status, WorkflowStatus.suspended);
+      expect(
+        await (store as WorkflowConcurrentStore).listConcurrentSteps(id),
+        contains(
+          isA<WorkflowConcurrentStepRecord>().having(
+            (record) => record.status,
+            'retained failed checkpoint',
+            WorkflowConcurrentStepStatus.failed,
+          ),
+        ),
+      );
+      clock.advance(const Duration(seconds: 1));
+      await runtime.resumeDueRuns(now: clock.now(), enqueue: false);
+      await runtime.executeRun(id);
+      expect((await store.get(id))!.status, WorkflowStatus.completed);
+      expect(
+        (await store.get(id))!.result,
+        handling == 'parallel' ? {'branch': 'done'} : 'done',
+      );
+    });
+  }
+
+  for (final structured in [false, true]) {
+    test('join outcome policy: parallel=$structured', () async {
+      final failure = StateError('uncaught branch failure');
+      runtime.registerWorkflow(
+        WorkflowScript<Object?>(
+          name: 'join.outcomes',
+          run: (script) {
+            final suspended = Completer<void>();
+            Future<String> wait(WorkflowScriptContext branch) => branch
+                .step('wait', (step) async {
+                  await step.sleep(const Duration(seconds: 1));
+                  return 'slept';
+                })
+                .whenComplete(suspended.complete);
+            Future<String> fail(WorkflowScriptContext branch) =>
+                branch.step('fail', (_) async {
+                  await suspended.future;
+                  throw failure;
+                });
+            if (structured) {
+              return script.parallel<String>({'wait': wait, 'fail': fail});
+            }
+            return Future.wait([wait(script), fail(script)]);
+          },
+        ).definition,
+      );
+      final id = await runtime.startWorkflow('join.outcomes');
+      if (structured) {
+        await expectLater(runtime.executeRun(id), throwsA(same(failure)));
+        expect((await store.get(id))!.status, WorkflowStatus.running);
+      } else {
+        // Ordinary Future.wait exposes its first error, here a suspension.
+        await runtime.executeRun(id);
+        expect((await store.get(id))!.status, WorkflowStatus.suspended);
+        clock.advance(const Duration(seconds: 1));
+        await runtime.resumeDueRuns(now: clock.now(), enqueue: false);
+        // On replay the wait succeeds, so the unhandled action failure escapes.
+        await expectLater(runtime.executeRun(id), throwsA(same(failure)));
+        expect((await store.get(id))!.status, WorkflowStatus.running);
+      }
+    });
+  }
+
+  test('escaping script errors remain retryable after a wait', () async {
+    final failure = StateError('failure outside a checkpoint');
+    runtime.registerWorkflow(
+      WorkflowScript<Object?>(
+        name: 'script.failure',
+        run: (script) async {
+          try {
+            await script.step('wait', (step) async {
+              await step.sleep(const Duration(seconds: 1));
+            });
+          } on Object {
+            throw failure;
+          }
+          return 'done';
+        },
+      ).definition,
+    );
+    final id = await runtime.startWorkflow('script.failure');
+    await expectLater(runtime.executeRun(id), throwsA(same(failure)));
+    final state = (await store.get(id))!;
+    expect(state.status, WorkflowStatus.running);
+    expect(state.ownerId, isNull);
+    expect(state.waitTopic, isNull);
+    expect(await store.listRunnableRuns(now: clock.now()), contains(id));
+  });
+
+  for (final script in [false, true]) {
+    for (final event in [false, true]) {
+      test(
+        'runtime owns suspension routing: script=$script event=$event',
+        () async {
+          const data = <String, Object?>{
+            'step': 'wrong-step',
+            'iterationStep': 'wrong-step',
+            'iteration': 99,
+            'type': 'wrong-type',
+            'topic': 'wrong-topic',
+            'dueAt': '1900-01-01T00:00:00.000Z',
+            'resumeAt': '1900-01-01T00:00:00.000Z',
+            'deadline': '1900-01-01T00:00:00.000Z',
+            'suspendedAt': '1900-01-01T00:00:00.000Z',
+            'policyDeadline': '1900-01-01T00:00:00.000Z',
+            'policyDeadlineApplied': true,
+            'resumeReason': 'eventDeadline',
+            'deliveredAt': '1900-01-01T00:00:00.000Z',
+            'custom': {'type': 'user type', 'step': 'user step'},
+          };
+          final definition = script
+              ? WorkflowScript(
+                  name: 'metadata.script',
+                  run: (script) => script.step('wait', (step) async {
+                    if (step.takeResumeData() != null) return 'done';
+                    if (event) {
+                      await step.awaitEvent('actual.topic', data: data);
+                    } else {
+                      await step.sleep(const Duration(seconds: 1), data: data);
+                    }
+                    return 'waiting';
+                  }),
+                ).definition
+              : Flow(
+                  name: 'metadata.flow',
+                  build: (flow) {
+                    flow.step('wait', (context) {
+                      if (context.takeResumeData() != null) return 'done';
+                      if (event) {
+                        context.awaitEvent('actual.topic', data: data);
+                      } else {
+                        context.sleep(const Duration(seconds: 1), data: data);
+                      }
+                      return 'waiting';
+                    });
+                  },
+                ).definition;
+          runtime.registerWorkflow(definition);
+          final id = await runtime.startWorkflow(definition.name);
+          await runtime.executeRun(id);
+          final metadata = script
+              ? (await (store as WorkflowConcurrentStore).listConcurrentSteps(
+                  id,
+                )).single.suspensionData!
+              : (await store.get(id))!.suspensionData!;
+          expect(metadata['step'], 'wait');
+          expect(metadata['iterationStep'], 'wait');
+          expect(metadata['iteration'], 0);
+          expect(metadata['type'], event ? 'event' : 'sleep');
+          expect(metadata['topic'], event ? 'actual.topic' : isNull);
+          expect(metadata['dueAt'], isNull);
+          expect(metadata['resumeReason'], isNull);
+          expect(metadata['policyDeadline'], isNull);
+          expect(metadata['custom'], data['custom']);
+          expect(
+            await runtime.resumeDueRuns(now: clock.now(), enqueue: false),
+            isEmpty,
+          );
+          if (event) {
+            await runtime.emit('actual.topic', const {'ready': true});
+          } else {
+            clock.advance(const Duration(seconds: 1));
+            await runtime.resumeDueRuns(now: clock.now(), enqueue: false);
+          }
+          await runtime.executeRun(id);
+          expect((await store.get(id))!.status, WorkflowStatus.completed);
+          expect((await store.get(id))!.result, 'done');
+        },
+      );
+    }
+  }
 
   test('delivered payload survives a failed resumed handler', () async {
     var resumedAttempts = 0;

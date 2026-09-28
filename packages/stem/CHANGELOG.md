@@ -16,8 +16,16 @@
   Preserve completed null results and resume payloads across retries without
   replaying completed siblings or restarting their timers.
 - Drain admitted checkpoint and branch work before releasing an execution,
-  including eager-error joins. Preserve actual sibling failures when another
-  branch suspends, and enforce cancellation policies on concurrent resumptions.
+  including eager-error joins. Explicit `parallel` joins prefer an uncaught
+  branch failure over sibling suspension; raw futures retain normal Dart
+  catch/first-error semantics. Atomically settle the script outcome so handled
+  checkpoint failures do not turn later suspension into a retry loop.
+  Enforce cancellation policies on concurrent resumptions.
+- Scope branch idempotency keys and lifecycle identities independently while
+  preserving the existing root-scope key format. Attempt every consumed due-run
+  candidate before reporting an individual continuation-publication failure.
+- Prevent suspension user data from replacing runtime-owned routing, identity,
+  deadline, or resume-reason metadata in both flows and scripts.
 - Add shared adapter regression coverage and a durable concurrency guide covering
   replay, branch identity, storage contracts, and upgrade requirements.
 - **Migration for custom implementers:** implement the new `parallel` method on

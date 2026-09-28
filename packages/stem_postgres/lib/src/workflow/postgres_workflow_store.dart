@@ -871,88 +871,143 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
     required String executionId,
   }) async {
     final now = _clock.now().toUtc();
-    await _connections.runInTransaction((ctx) async {
-      final run = await ctx
-          .query<StemWorkflowRun>()
-          .whereEquals('id', runId)
-          .whereEquals('namespace', namespace)
-          .lock('FOR UPDATE')
-          .first();
-      if (run == null ||
-          run.executionId != executionId ||
-          ![
-            WorkflowStatus.running.name,
-            WorkflowStatus.suspended.name,
-          ].contains(run.status)) {
-        return;
-      }
-      final children = await ctx.driver.queryRaw(
-        'SELECT status, suspension_data FROM stem_workflow_concurrent_steps '
-        'WHERE namespace = ? AND run_id = ?',
-        [namespace, runId],
-      );
-      var hasUnfinished = false;
-      var allSuspended = true;
-      DateTime? earliest;
-      Map<String, Object?>? representative;
-      for (final child in children) {
-        final status = child['status']! as String;
-        if (status == WorkflowConcurrentStepStatus.completed.name) continue;
-        hasUnfinished = true;
-        if (status != WorkflowConcurrentStepStatus.suspended.name) {
-          allSuspended = false;
-          continue;
-        }
-        final raw = child['suspension_data'];
-        final data = raw is String
-            ? (jsonDecode(raw) as Map).cast<String, Object?>()
-            : null;
-        representative ??= data;
-        for (final key in const ['resumeAt', 'deadline']) {
-          final value = data?[key];
-          final due = value is String
-              ? DateTime.tryParse(value)?.toUtc()
-              : null;
-          if (due != null && (earliest == null || due.isBefore(earliest))) {
-            earliest = due;
-          }
-        }
-      }
-      if (children.isEmpty) {
-        await ctx
-            .query<StemWorkflowRun>()
-            .whereEquals('id', runId)
-            .whereEquals('namespace', namespace)
-            .whereEquals('executionId', executionId)
-            .update({
-              'ownerId': null,
-              'leaseExpiresAt': null,
-              'updatedAt': now,
-            });
-        return;
-      }
-      final aggregateSuspended = hasUnfinished && allSuspended;
+    await _connections.runInTransaction(
+      (ctx) => _releaseRunExecutionInTransaction(
+        ctx,
+        runId,
+        executionId: executionId,
+        now: now,
+      ),
+    );
+  }
+
+  @override
+  Future<void> releaseConcurrentExecution(
+    String runId, {
+    required String executionId,
+    required bool suspended,
+  }) async {
+    final now = _clock.now().toUtc();
+    await _connections.runInTransaction(
+      (ctx) => _releaseRunExecutionInTransaction(
+        ctx,
+        runId,
+        executionId: executionId,
+        now: now,
+        concurrentOutcome: suspended,
+      ),
+    );
+  }
+
+  Future<void> _releaseRunExecutionInTransaction(
+    QueryContext ctx,
+    String runId, {
+    required String executionId,
+    required DateTime now,
+    bool? concurrentOutcome,
+  }) async {
+    final run = await ctx
+        .query<StemWorkflowRun>()
+        .whereEquals('id', runId)
+        .whereEquals('namespace', namespace)
+        .lock('FOR UPDATE')
+        .first();
+    if (run == null ||
+        run.executionId != executionId ||
+        run.ownerId == null ||
+        run.ownerId!.isEmpty ||
+        ![
+          WorkflowStatus.running.name,
+          WorkflowStatus.suspended.name,
+        ].contains(run.status)) {
+      return;
+    }
+    final children = await ctx.driver.queryRaw(
+      'SELECT status, suspension_data FROM stem_workflow_concurrent_steps '
+      'WHERE namespace = ? AND run_id = ?',
+      [namespace, runId],
+    );
+    if (concurrentOutcome == false) {
       await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .whereEquals('namespace', namespace)
           .whereEquals('executionId', executionId)
           .update({
-            'status': aggregateSuspended
-                ? WorkflowStatus.suspended.name
-                : WorkflowStatus.running.name,
+            'status': WorkflowStatus.running.name,
             'ownerId': null,
             'leaseExpiresAt': null,
             'updatedAt': now,
-            'resumeAt': aggregateSuspended ? earliest : null,
-            'waitTopic': aggregateSuspended && representative != null
-                ? representative['topic']
-                : null,
-            'suspensionData': aggregateSuspended && representative != null
-                ? jsonEncode(representative)
-                : null,
+            'resumeAt': null,
+            'waitTopic': null,
+            'suspensionData': null,
           });
-    });
+      return;
+    }
+    var hasUnfinished = false;
+    var allSuspended = true;
+    DateTime? earliest;
+    Map<String, Object?>? representative;
+    for (final child in children) {
+      final status = child['status']! as String;
+      if (status == WorkflowConcurrentStepStatus.completed.name ||
+          (concurrentOutcome == true &&
+              status == WorkflowConcurrentStepStatus.failed.name)) {
+        continue;
+      }
+      hasUnfinished = true;
+      if (status != WorkflowConcurrentStepStatus.suspended.name) {
+        allSuspended = false;
+        continue;
+      }
+      final raw = child['suspension_data'];
+      final data = raw is String
+          ? (jsonDecode(raw) as Map).cast<String, Object?>()
+          : null;
+      representative ??= data;
+      for (final key in const ['resumeAt', 'deadline']) {
+        final value = data?[key];
+        final due = value is String ? DateTime.tryParse(value)?.toUtc() : null;
+        if (due != null && (earliest == null || due.isBefore(earliest))) {
+          earliest = due;
+          representative = data;
+        }
+      }
+    }
+    if (children.isEmpty) {
+      await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('executionId', executionId)
+          .update({
+            'ownerId': null,
+            'leaseExpiresAt': null,
+            'updatedAt': now,
+          });
+      return;
+    }
+    final aggregateSuspended = hasUnfinished && allSuspended;
+    await ctx
+        .query<StemWorkflowRun>()
+        .whereEquals('id', runId)
+        .whereEquals('namespace', namespace)
+        .whereEquals('executionId', executionId)
+        .update({
+          'status': aggregateSuspended
+              ? WorkflowStatus.suspended.name
+              : WorkflowStatus.running.name,
+          'ownerId': null,
+          'leaseExpiresAt': null,
+          'updatedAt': now,
+          'resumeAt': aggregateSuspended ? earliest : null,
+          'waitTopic': aggregateSuspended && representative != null
+              ? representative['topic']
+              : null,
+          'suspensionData': aggregateSuspended && representative != null
+              ? jsonEncode(representative)
+              : null,
+        });
   }
 
   @override
@@ -1047,6 +1102,7 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
 
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
+    if (limit <= 0) return const [];
     final ctx = _connections.context;
     // Check watchers first
     final watcherRows = await ctx
@@ -1063,18 +1119,27 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
         .query<StemWorkflowRun>()
         .whereEquals('waitTopic', topic)
         .whereEquals('namespace', namespace)
+        .whereIn('status', [
+          WorkflowStatus.running.name,
+          WorkflowStatus.suspended.name,
+        ])
+        .orderBy('id')
         .limit(limit)
         .get();
 
     ids.addAll(fallbackRows.map((r) => r.id));
     final concurrent = await ctx.driver.queryRaw(
-      'SELECT run_id, suspension_data FROM stem_workflow_concurrent_steps '
-      'WHERE namespace = ? AND status = ? LIMIT ?',
-      [namespace, WorkflowConcurrentStepStatus.suspended.name, limit],
+      'SELECT DISTINCT c.run_id FROM stem_workflow_concurrent_steps c '
+      'JOIN stem_workflow_runs r '
+      'ON r.namespace = c.namespace AND r.id = c.run_id '
+      'WHERE c.namespace = ? AND c.status = ? '
+      "AND r.status IN ('running','suspended') "
+      "AND c.suspension_data::jsonb ->> 'topic' = ? "
+      'ORDER BY c.run_id LIMIT ?',
+      [namespace, WorkflowConcurrentStepStatus.suspended.name, topic, limit],
     );
     for (final row in concurrent) {
-      final data = _decodeMap(row['suspension_data']);
-      if (data['topic'] == topic) ids.add(row['run_id']! as String);
+      ids.add(row['run_id']! as String);
     }
     return ids.take(limit).toList(growable: false);
   }
@@ -1085,11 +1150,6 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
-    final concurrent = await resolveConcurrentEvents(
-      topic,
-      payload,
-      limit: limit,
-    );
     final legacy = await _connections.runInTransaction((ctx) async {
       final watchers = await ctx
           .query<$StemWorkflowWatcher>()
@@ -1179,6 +1239,13 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
 
       return resolutions;
     });
+    final concurrent = legacy.length >= limit
+        ? const <WorkflowConcurrentStepRecord>[]
+        : await resolveConcurrentEvents(
+            topic,
+            payload,
+            limit: limit - legacy.length,
+          );
     final projected = concurrent
         .map(
           (step) => WorkflowWatcherResolution(
@@ -1189,7 +1256,7 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
           ),
         )
         .toList();
-    return [...projected, ...legacy].take(limit).toList(growable: false);
+    return [...legacy, ...projected].toList(growable: false);
   }
 
   @override
@@ -1223,7 +1290,8 @@ ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
       'ON r.namespace = c.namespace AND r.id = c.run_id '
       'WHERE c.namespace = ? AND c.status = ? '
       "AND c.suspension_data::jsonb ->> 'topic' = ? "
-      "AND r.status IN ('running', 'suspended') ORDER BY c.updated_at LIMIT ?",
+      "AND r.status IN ('running', 'suspended') "
+      'ORDER BY c.run_id, c.invocation_id LIMIT ?',
       [namespace, WorkflowConcurrentStepStatus.suspended.name, topic, limit],
     );
     for (final row in concurrent) {
@@ -1571,7 +1639,7 @@ WHERE namespace = ? AND run_id = ?
         'WHERE c.namespace = ? AND c.status = ? '
         "AND c.suspension_data::jsonb ->> 'topic' = ? "
         "AND r.status IN ('running','suspended') "
-        'ORDER BY c.updated_at LIMIT ?',
+        'ORDER BY c.run_id, c.invocation_id LIMIT ?',
         [namespace, WorkflowConcurrentStepStatus.suspended.name, topic, limit],
       );
       final result = <WorkflowConcurrentStepRecord>[];
@@ -1654,7 +1722,7 @@ WHERE namespace = ? AND run_id = ?
         "c.suspension_data::jsonb ->> 'resumeAt', "
         "c.suspension_data::jsonb ->> 'deadline')::timestamptz <= ? "
         '${runId == null ? '' : 'AND c.run_id = ? '}'
-        'ORDER BY c.updated_at LIMIT ?',
+        'ORDER BY c.run_id, c.invocation_id LIMIT ?',
         [
           namespace,
           WorkflowConcurrentStepStatus.suspended.name,

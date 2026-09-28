@@ -255,12 +255,18 @@ class InMemoryWorkflowStore
     return raw is String ? DateTime.tryParse(raw) : null;
   }
 
-  RunState _projectConcurrentWaits(RunState state) {
+  RunState _projectConcurrentWaits(
+    RunState state, {
+    bool ignoreFailed = false,
+  }) {
     final records = _concurrentSteps[state.id];
     if (state.isTerminal || records == null || records.isEmpty) return state;
     final unfinished = records.values
         .where(
-          (record) => record.status != WorkflowConcurrentStepStatus.completed,
+          (record) =>
+              record.status != WorkflowConcurrentStepStatus.completed &&
+              (!ignoreFailed ||
+                  record.status != WorkflowConcurrentStepStatus.failed),
         )
         .toList();
     if (unfinished.isEmpty ||
@@ -852,8 +858,40 @@ class InMemoryWorkflowStore
     required String executionId,
   }) async {
     final state = _runs[runId];
-    if (state == null || state.executionId != executionId) return;
+    if (state == null ||
+        state.executionId != executionId ||
+        state.ownerId == null) {
+      return;
+    }
     _runs[runId] = _projectConcurrentWaits(state).copyWith(
+      ownerId: null,
+      leaseExpiresAt: null,
+      updatedAt: _clock.now(),
+    );
+  }
+
+  @override
+  Future<void> releaseConcurrentExecution(
+    String runId, {
+    required String executionId,
+    required bool suspended,
+  }) async {
+    final state = _runs[runId];
+    if (state == null ||
+        state.executionId != executionId ||
+        state.ownerId == null ||
+        state.isTerminal) {
+      return;
+    }
+    final projected = suspended
+        ? _projectConcurrentWaits(state, ignoreFailed: true)
+        : state.copyWith(
+            status: WorkflowStatus.running,
+            resumeAt: null,
+            waitTopic: null,
+            suspensionData: const <String, Object?>{},
+          );
+    _runs[runId] = projected.copyWith(
       ownerId: null,
       leaseExpiresAt: null,
       updatedAt: _clock.now(),
@@ -938,13 +976,21 @@ class InMemoryWorkflowStore
   @override
   /// Lists runs waiting on a specific event [topic].
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
-    final watchers = _watchersByTopic[topic];
-    if (watchers != null && watchers.isNotEmpty) {
-      return watchers.keys.take(limit).toList(growable: false);
+    if (limit <= 0) return const [];
+    final ids = <String>{
+      ...?_watchersByTopic[topic]?.keys,
+      ...?_suspendedTopics[topic],
+    };
+    for (final records in _concurrentSteps.values) {
+      for (final record in records.values) {
+        if (record.status == WorkflowConcurrentStepStatus.suspended &&
+            record.suspensionData?['topic'] == topic &&
+            !(_runs[record.runId]?.isTerminal ?? true)) {
+          ids.add(record.runId);
+        }
+      }
     }
-    final runs = _suspendedTopics[topic];
-    if (runs == null) return const [];
-    return runs.take(limit).toList(growable: false);
+    return ids.take(limit).toList(growable: false);
   }
 
   @override
@@ -953,6 +999,7 @@ class InMemoryWorkflowStore
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
+    if (limit <= 0) return const [];
     final concurrent = await resolveConcurrentEvents(
       topic,
       payload,
@@ -969,8 +1016,10 @@ class InMemoryWorkflowStore
     ];
     final topicMap = _watchersByTopic[topic];
     if (topicMap == null || topicMap.isEmpty) return results;
+    final remaining = limit - results.length;
+    if (remaining <= 0) return results;
     final now = _clock.now();
-    final ids = topicMap.keys.take(limit).toList(growable: false);
+    final ids = topicMap.keys.take(remaining).toList(growable: false);
     for (final runId in ids) {
       final record = topicMap.remove(runId);
       if (record == null) continue;

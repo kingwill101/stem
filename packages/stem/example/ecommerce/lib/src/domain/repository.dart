@@ -10,8 +10,8 @@ import 'catalog.dart';
 class EcommerceRepository {
   EcommerceRepository._({
     required this.databasePath,
-    required DataSource dataSource,
-  }) : _dataSource = dataSource;
+    required this._dataSource,
+  });
 
   final String databasePath;
   final DataSource _dataSource;

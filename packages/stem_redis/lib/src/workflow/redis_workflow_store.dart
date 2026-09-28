@@ -203,7 +203,7 @@ return raw
   static const _luaResolveConcurrent = '''
 local topicKey = KEYS[1]
 local recordPrefix = ARGV[1]
-local payload = cjson.decode(ARGV[2])
+local payloadRaw = ARGV[2]
 local limit = tonumber(ARGV[3])
 local now = ARGV[4]
 local topic = ARGV[5]
@@ -224,7 +224,9 @@ for _, invocation in ipairs(members) do
       if record['status'] == 'suspended' and (not data['topic'] or data['topic'] == topic) then
         data['type'] = 'event'
         data['topic'] = topic
-        data['payload'] = payload
+        -- Keep opaque event payloads out of Lua cjson.  Decoding and
+        -- re-encoding here changes arrays, nulls, and large integers.
+        data['payloadRaw'] = payloadRaw
         data['deliveredAt'] = now
         record['status'] = 'ready'
         record['revision'] = (tonumber(record['revision']) or 0) + 1
@@ -319,6 +321,35 @@ return 1
     return result;
   }
 
+  /// Concurrent records are rewritten by Redis Lua scripts.  Values supplied
+  /// by user code must therefore not be represented as Lua tables/numbers:
+  /// cjson normalizes empty containers and cannot represent all Dart integers.
+  /// Keep their JSON bytes in string fields and expose the normal shape only
+  /// when decoding at the Dart boundary.
+  Map<String, Object?> _encodeConcurrentRecord(
+    WorkflowConcurrentStepRecord record,
+  ) {
+    final json = Map<String, Object?>.from(record.toJson());
+    json['valueRaw'] = jsonEncode(record.value);
+    json['value'] = null;
+    final suspension = record.suspensionData;
+    if (suspension != null) {
+      json['suspensionDataRaw'] = jsonEncode(suspension);
+      json['suspensionData'] = <String, Object?>{
+        for (final key in const [
+          'type',
+          'topic',
+          'deadline',
+          'resumeAt',
+          'deliveredAt',
+          'resumeReason',
+        ])
+          if (suspension.containsKey(key)) key: suspension[key],
+      };
+    }
+    return json;
+  }
+
   static const _luaRegisterWatcher = '''
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
@@ -371,56 +402,39 @@ return 1
   static const _luaResolveWatchers = '''
 local watchersHash = KEYS[1]
 local dueKey = KEYS[2]
-local watchersTopicKey = KEYS[3]
-local topicSetKey = KEYS[4]
-
-local runKeyPrefix = ARGV[1]
-local payloadJson = ARGV[2]
-local topic = ARGV[3]
-local limit = tonumber(ARGV[4])
-local nowIso = ARGV[5]
-local runningStatus = ARGV[6]
-
-local payload = cjson.decode(payloadJson)
-local members = redis.call('ZRANGE', watchersTopicKey, 0, limit - 1)
+local entries = cjson.decode(ARGV[1])
+local nowIso = ARGV[2]
+local runningStatus = ARGV[3]
+local suspendedStatus = ARGV[4]
 local results = {}
-for _, runId in ipairs(members) do
+for _, entry in ipairs(entries) do
+  local runId = entry['runId']
   local rawWatcher = redis.call('HGET', watchersHash, runId)
-  if rawWatcher then
-    local watcher = cjson.decode(rawWatcher)
-    local runKey = runKeyPrefix .. runId
+  -- The watcher was read by Dart and its exact bytes are our optimistic
+  -- concurrency guard.  In particular, do not cjson-decode it here:
+  -- Redis Lua numbers lose precision for otherwise valid JSON integers.
+  if rawWatcher and rawWatcher == entry['expectedRaw'] then
+    local runKey = entry['runKey']
     local status = redis.call('HGET', runKey, 'status')
+    local waitTopic = redis.call('HGET', runKey, 'wait_topic')
     redis.call('HDEL', watchersHash, runId)
-    local watcherTopicKey = watcher['watchersTopicKey'] or watchersTopicKey
-    local watcherTopicSet = watcher['topicSetKey'] or topicSetKey
-    redis.call('ZREM', watcherTopicKey, runId)
-    redis.call('SREM', watcherTopicSet, runId)
+    redis.call('ZREM', entry['watchersTopicKey'], runId)
+    redis.call('SREM', entry['topicSetKey'], runId)
     redis.call('ZREM', dueKey, runId)
-    local metadata = watcher['data'] or {}
-    metadata['type'] = 'event'
-    metadata['topic'] = topic
-    metadata['payload'] = payload
-    metadata['step'] = metadata['step'] or watcher['stepName']
-    metadata['iterationStep'] = metadata['iterationStep'] or watcher['stepName']
-    metadata['deliveredAt'] = nowIso
-    if status == runningStatus or status == ARGV[7] then
+    if (status == runningStatus or status == suspendedStatus) and waitTopic == entry['topic'] then
       redis.call('HSET', runKey,
         'status', runningStatus,
         'wait_topic', '',
         'resume_at', '',
-        'suspension_data', cjson.encode(metadata),
+        'suspension_data', entry['metadataRaw'],
         'updated_at', nowIso)
       table.insert(results, cjson.encode({
         runId = runId,
-        stepName = watcher['stepName'],
-        topic = topic,
-        resumeData = metadata
+        stepName = entry['stepName'],
+        topic = entry['topic'],
+        resumeDataRaw = entry['metadataRaw']
       }))
     end
-  else
-    redis.call('ZREM', watchersTopicKey, runId)
-    redis.call('SREM', topicSetKey, runId)
-    redis.call('ZREM', dueKey, runId)
   end
 end
 return results
@@ -701,17 +715,29 @@ return 1
 local runKey = KEYS[1]
 local recordsKey = KEYS[2]
 local dueKey = KEYS[3]
-if redis.call('HGET', runKey, 'execution_id') ~= ARGV[1] then return 0 end
-redis.call('HSET', runKey, 'owner_id', '', 'lease_expires_at', '', 'updated_at', ARGV[2])
+local executionId = ARGV[1]
+local outcome = ARGV[3]
+if redis.call('HGET', runKey, 'execution_id') ~= executionId then return 0 end
+local owner = redis.call('HGET', runKey, 'owner_id')
+if not owner or owner == '' then return 0 end
 local status = redis.call('HGET', runKey, 'status')
-if status == 'completed' or status == 'failed' or status == 'cancelled' then return 1 end
+if status == 'completed' or status == 'failed' or status == 'cancelled' then return 0 end
+if status ~= 'running' and status ~= 'suspended' then return 0 end
+if outcome == 'retry' then
+  redis.call('HSET', runKey, 'status', 'running', 'wait_topic', '', 'resume_at', '',
+    'suspension_data', '', 'owner_id', '', 'lease_expires_at', '', 'updated_at', ARGV[2])
+  return 1
+end
 local running = false
 local suspended = false
 local minimum = nil
 local representative = nil
 for _, raw in ipairs(redis.call('HVALS', recordsKey)) do
   local record = cjson.decode(raw)
-  if record['status'] == 'running' or record['status'] == 'ready' or record['status'] == 'pending' or record['status'] == 'failed' then
+  if record['status'] == 'completed' then
+  elseif outcome ~= 'suspended' and record['status'] == 'failed' then
+    running = true
+  elseif record['status'] == 'running' or record['status'] == 'ready' or record['status'] == 'pending' then
     running = true
   elseif record['status'] == 'suspended' then
     suspended = true
@@ -724,8 +750,10 @@ for _, raw in ipairs(redis.call('HVALS', recordsKey)) do
     end
   end
 end
+redis.call('HSET', runKey, 'owner_id', '', 'lease_expires_at', '', 'updated_at', ARGV[2])
 if running then
-  redis.call('HSET', runKey, 'status', 'running', 'wait_topic', '', 'resume_at', '')
+  redis.call('HSET', runKey, 'status', 'running', 'wait_topic', '', 'resume_at', '',
+    'suspension_data', '')
 elseif suspended then
   redis.call('HSET', runKey, 'status', 'suspended', 'resume_at', minimum or '',
     'wait_topic', (representative and representative['topic']) or '',
@@ -1442,6 +1470,26 @@ return 1
       _concurrentDueKey(),
       executionId,
       _clock.now().toIso8601String(),
+      'clean',
+    ]);
+  }
+
+  @override
+  Future<void> releaseConcurrentExecution(
+    String runId, {
+    required String executionId,
+    required bool suspended,
+  }) async {
+    await _send([
+      'EVAL',
+      _luaReleaseRunExecution,
+      '3',
+      _runKey(runId),
+      _concurrentKey(runId),
+      _concurrentDueKey(),
+      executionId,
+      _clock.now().toIso8601String(),
+      if (suspended) 'suspended' else 'retry',
     ]);
   }
 
@@ -1484,6 +1532,7 @@ return 1
 
   @override
   Future<List<String>> dueRuns(DateTime now, {int limit = 256}) async {
+    if (limit <= 0) return const [];
     final entries = await _send([
       'ZRANGEBYSCORE',
       _dueKey(),
@@ -1493,11 +1542,12 @@ return 1
       '0',
       limit.toString(),
     ]) as List?;
-    if (entries == null) return const [];
-    final ids = entries.cast<String>();
+    final ids = entries?.cast<String>() ?? const <String>[];
     if (ids.isNotEmpty) {
       await _send(['ZREM', _dueKey(), ...ids]);
     }
+    final remaining = limit - ids.length;
+    if (remaining <= 0) return ids.take(limit).toList(growable: false);
     final concurrent = await _send([
       'ZRANGEBYSCORE',
       _concurrentDueKey(),
@@ -1505,7 +1555,7 @@ return 1
       now.millisecondsSinceEpoch.toString(),
       'LIMIT',
       '0',
-      limit.toString(),
+      remaining.toString(),
     ]) as List?;
     final concurrentRuns = <String>{};
     for (final entry in concurrent ?? const []) {
@@ -1513,7 +1563,15 @@ return 1
       final pair = _concurrentMember(value);
       if (pair != null) concurrentRuns.add(pair.$1);
     }
-    return [...ids, ...concurrentRuns];
+    final result = <String>[];
+    final seen = <String>{};
+    for (final id in ids) {
+      if (seen.add(id) && result.length < limit) result.add(id);
+    }
+    for (final id in concurrentRuns) {
+      if (seen.add(id) && result.length < limit) result.add(id);
+    }
+    return result;
   }
 
   @override
@@ -1546,11 +1604,73 @@ return 1
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
+    if (limit <= 0) return const [];
     // Keep the legacy API useful to recovery workers that do not know about
     // the optional concurrent capability. The operation is idempotent: a
     // subsequent explicit concurrent resolution sees no suspended child.
-    await resolveConcurrentEvents(topic, payload, limit: limit);
+    final concurrent = await resolveConcurrentEvents(
+      topic,
+      payload,
+      limit: limit,
+    );
+    final resolutions = [
+      for (final record in concurrent)
+        WorkflowWatcherResolution(
+          runId: record.runId,
+          stepName: record.stepName,
+          topic: topic,
+          resumeData: record.suspensionData ?? const {},
+        ),
+    ];
+    final remaining = limit - resolutions.length;
+    if (remaining <= 0) return resolutions;
     final nowIso = _clock.now().toIso8601String();
+    final entries = <Map<String, Object?>>[];
+    await for (final runId in _sortedSetMembers(
+      _watchersTopicKey(topic),
+      pageSize: remaining,
+    )) {
+      final rawWatcher =
+          await _send(['HGET', _watchersHashKey(), runId]) as String?;
+      if (rawWatcher == null || rawWatcher.isEmpty) continue;
+      final decoded = jsonDecode(rawWatcher);
+      if (decoded is! Map) continue;
+      final watcher = decoded.cast<String, Object?>();
+      if (watcher['topic'] != topic) continue;
+      final state = await get(runId);
+      if (state == null || state.isTerminal || state.waitTopic != topic) {
+        continue;
+      }
+      final data = watcher['data'];
+      final metadata = <String, Object?>{
+        if (data is Map) ...data.cast<String, Object?>(),
+        'type': 'event',
+        'topic': topic,
+        'payload': payload,
+        'step':
+            (data is Map ? data['step'] : null) ??
+            watcher['stepName'] as String?,
+        'iterationStep':
+            (data is Map ? data['iterationStep'] : null) ??
+            watcher['stepName'] as String?,
+        'deliveredAt': nowIso,
+      };
+      entries.add({
+        'runId': runId,
+        'expectedRaw': rawWatcher,
+        'runKey': _runKey(runId),
+        'stepName': watcher['stepName'] as String? ?? '',
+        'topic': topic,
+        'watchersTopicKey':
+            watcher['watchersTopicKey'] as String? ?? _watchersTopicKey(topic),
+        'topicSetKey': watcher['topicSetKey'] as String? ?? _topicKey(topic),
+        // Keep this JSON opaque to Redis Lua. Dart's JSON implementation
+        // preserves values (including integers beyond JavaScript's range).
+        'metadataRaw': jsonEncode(metadata),
+      });
+      if (entries.length == remaining) break;
+    }
+    if (entries.isEmpty) return resolutions;
     final results = await _send([
       'EVAL',
       _luaResolveWatchers,
@@ -1559,21 +1679,17 @@ return 1
       _dueKey(),
       _watchersTopicKey(topic),
       _topicKey(topic),
-      _runKeyPrefix(),
-      jsonEncode(payload),
-      topic,
-      limit.toString(),
+      jsonEncode(entries),
       nowIso,
       WorkflowStatus.running.name,
       WorkflowStatus.suspended.name,
     ]) as List?;
     if (results == null || results.isEmpty) {
-      return const [];
+      return resolutions;
     }
-    final resolutions = <WorkflowWatcherResolution>[];
     for (final raw in results.cast<String>()) {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      final resume = decoded['resumeData'];
+      final resume = jsonDecode(decoded['resumeDataRaw'] as String);
       resolutions.add(
         WorkflowWatcherResolution(
           runId: decoded['runId'] as String,
@@ -1594,22 +1710,18 @@ return 1
     int limit = 256,
   }) async {
     if (limit <= 0) return const [];
-    final members = await _send([
-      'ZRANGE',
-      _watchersTopicKey(topic),
-      '0',
-      (limit - 1).toString(),
-    ]) as List?;
     final watchers = <WorkflowWatcher>[];
-    for (final runId in members?.cast<String>() ?? const <String>[]) {
+    await for (final runId in _sortedSetMembers(
+      _watchersTopicKey(topic),
+      pageSize: limit,
+    )) {
       final raw = await _send(['HGET', _watchersHashKey(), runId]) as String?;
       if (raw == null || raw.isEmpty) {
         continue;
       }
       final status = await _send(['HGET', _runKey(runId), 'status']);
-      if (status == WorkflowStatus.completed.name ||
-          status == WorkflowStatus.failed.name ||
-          status == WorkflowStatus.cancelled.name) {
+      if (status != WorkflowStatus.running.name &&
+          status != WorkflowStatus.suspended.name) {
         continue;
       }
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
@@ -1629,16 +1741,13 @@ return 1
           data: data is Map ? data.cast<String, Object?>() : const {},
         ),
       );
+      if (watchers.length == limit) return watchers;
     }
-    final concurrentMembers = await _send([
-      'ZRANGE',
+    await for (final member in _sortedSetMembers(
       _concurrentTopicKey(topic),
-      '0',
-      (limit - watchers.length - 1).toString(),
-    ]) as List?;
-    for (final member in concurrentMembers ?? const []) {
-      final rawMember = member.toString();
-      final pair = _concurrentMember(rawMember);
+      pageSize: limit - watchers.length,
+    )) {
+      final pair = _concurrentMember(member);
       if (pair == null) continue;
       final runId = pair.$1;
       final invocation = pair.$2;
@@ -1647,7 +1756,13 @@ return 1
           record.status != WorkflowConcurrentStepStatus.suspended) {
         continue;
       }
+      final status = await _send(['HGET', _runKey(runId), 'status']);
+      if (status != WorkflowStatus.running.name &&
+          status != WorkflowStatus.suspended.name) {
+        continue;
+      }
       final data = record.suspensionData ?? const <String, Object?>{};
+      if (data['topic'] != topic) continue;
       final deadline = data['deadline'] ?? data['resumeAt'];
       watchers.add(
         WorkflowWatcher(
@@ -1659,11 +1774,29 @@ return 1
           data: data,
         ),
       );
-    }
-    if (watchers.length > limit) {
-      return watchers.sublist(0, limit);
+      if (watchers.length == limit) return watchers;
     }
     return watchers;
+  }
+
+  Stream<String> _sortedSetMembers(
+    String key, {
+    required int pageSize,
+  }) async* {
+    var offset = 0;
+    while (true) {
+      final page =
+          (await _send([
+            'ZRANGE',
+            key,
+            offset.toString(),
+            (offset + pageSize - 1).toString(),
+          ]) as List?)?.cast<String>() ??
+          const <String>[];
+      yield* Stream.fromIterable(page);
+      if (page.length < pageSize) return;
+      offset += page.length;
+    }
   }
 
   @override
@@ -1826,30 +1959,8 @@ return 1
     int limit = 50,
     int offset = 0,
   }) async {
-    final ids = <String>[];
-    var cursor = '0';
-    final pattern = '$namespace:wf:wf-*';
-    do {
-      final result = await _send([
-        'SCAN',
-        cursor,
-        'MATCH',
-        pattern,
-        'COUNT',
-        '100',
-      ]) as List;
-      cursor = result[0] as String;
-      final keys = (result[1] as List).cast<String>();
-      for (final key in keys) {
-        final parts = key.split(':');
-        if (parts.length != 3) continue;
-        final id = parts.last;
-        if (!ids.contains(id)) {
-          ids.add(id);
-        }
-      }
-    } while (cursor != '0' && ids.length < limit * 3);
-
+    if (limit <= 0) return const [];
+    final ids = await _listRunIds();
     final states = <RunState>[];
     ids.sort((a, b) => b.compareTo(a));
     var skipped = 0;
@@ -1874,30 +1985,9 @@ return 1
     int limit = 50,
     int offset = 0,
   }) async {
+    if (limit <= 0) return const [];
     final resolvedNow = now ?? _clock.now();
-    final ids = <String>[];
-    var cursor = '0';
-    final pattern = '$namespace:wf:wf-*';
-    do {
-      final result = await _send([
-        'SCAN',
-        cursor,
-        'MATCH',
-        pattern,
-        'COUNT',
-        '100',
-      ]) as List;
-      cursor = result[0] as String;
-      final keys = (result[1] as List).cast<String>();
-      for (final key in keys) {
-        final parts = key.split(':');
-        if (parts.length != 3) continue;
-        final id = parts.last;
-        if (!ids.contains(id)) {
-          ids.add(id);
-        }
-      }
-    } while (cursor != '0' && ids.length < limit * 3);
+    final ids = await _listRunIds();
 
     ids.sort((a, b) => b.compareTo(a));
     final runnable = <String>[];
@@ -1921,6 +2011,51 @@ return 1
       if (runnable.length >= limit) break;
     }
     return runnable;
+  }
+
+  Future<List<String>> _listRunIds() async {
+    final ids = <String>{};
+    var cursor = '0';
+    final prefix = _runKeyPrefix();
+    final escaped = prefix.replaceAllMapped(
+      RegExp(r'([\\*?\[\]])'),
+      (match) => '\\${match[0]}',
+    );
+    final statuses = WorkflowStatus.values.map((status) => status.name).toSet();
+    do {
+      final result = await _send([
+        'SCAN',
+        cursor,
+        'MATCH',
+        '$escaped*',
+        'COUNT',
+        '100',
+      ]) as List;
+      cursor = result[0] as String;
+      final keys = (result[1] as List).cast<String>();
+      for (final key in keys) {
+        if (!key.startsWith(prefix)) continue;
+        final type = await _send(['TYPE', key]);
+        if (type != 'hash') continue;
+        final fields = await _send([
+          'HMGET',
+          key,
+          'workflow',
+          'status',
+          'created_at',
+        ]) as List;
+        // A checkpoint may itself be named "workflow". Run fields are stored
+        // as bare values, whereas checkpoint values are JSON-encoded.
+        if (fields[0] == null ||
+            !statuses.contains(fields[1]) ||
+            fields[2] == null) {
+          continue;
+        }
+        final id = key.substring(prefix.length);
+        if (id.isNotEmpty) ids.add(id);
+      }
+    } while (cursor != '0');
+    return ids.toList(growable: false);
   }
 
   @override
@@ -1949,8 +2084,30 @@ return 1
       throw const FormatException('Invalid concurrent workflow record.');
     }
     final map = decoded.cast<String, Object?>();
+    var decodedValue = map['value'];
+    final valueRaw = map['valueRaw'];
+    if (valueRaw is String) decodedValue = jsonDecode(valueRaw);
     Map<String, Object?>? optionalMap(Object? value) =>
         value is Map ? value.cast<String, Object?>() : null;
+    var suspension = optionalMap(map['suspensionData']);
+    final suspensionRaw = map['suspensionDataRaw'];
+    if (suspensionRaw is String) {
+      final original = jsonDecode(suspensionRaw);
+      if (original is Map) {
+        suspension = original.cast<String, Object?>();
+        final operational = optionalMap(map['suspensionData']);
+        if (operational != null) {
+          for (final entry in operational.entries) {
+            final value = entry.value;
+            if (entry.key == 'payloadRaw' && value is String) {
+              suspension['payload'] = jsonDecode(value);
+            } else {
+              suspension[entry.key] = entry.value;
+            }
+          }
+        }
+      }
+    }
     return WorkflowConcurrentStepRecord(
       runId: map['runId']! as String,
       invocationId: map['invocationId']! as String,
@@ -1963,8 +2120,8 @@ return 1
         (status) => status.name == map['status'],
       ),
       executionId: map['executionId']! as String,
-      value: map['value'],
-      suspensionData: optionalMap(map['suspensionData']),
+      value: decodedValue,
+      suspensionData: suspension,
       error: map['error'] as String?,
       stack: map['stack'] as String?,
       updatedAt: DateTime.parse(map['updatedAt']! as String),
@@ -1992,7 +2149,7 @@ return 1
     String? checkpointName,
   }) async {
     record.validateCheckpoint(checkpointName);
-    final data = record.toJson();
+    final data = _encodeConcurrentRecord(record);
     final deadline =
         record.suspensionData?['deadline'] ??
         record.suspensionData?['resumeAt'];

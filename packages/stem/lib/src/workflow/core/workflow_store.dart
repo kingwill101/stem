@@ -188,11 +188,12 @@ abstract interface class WorkflowRunChanges {
 /// unexpired run execution claim, not just the token copied into the record.
 /// Revision one inserts a new invocation; every mutation advances by one.
 ///
-/// A child suspension does not release the parent execution lease. On release,
-/// stores atomically project the outstanding children onto the run: ready,
+/// A child suspension does not release the parent execution lease. On ordinary
+/// release, stores project the outstanding children onto the run: ready,
 /// running, pending, or failed children keep it runnable; only suspended
 /// children leave it suspended at the earliest remaining deadline. Terminal
-/// run states are never changed by that projection.
+/// run states are never changed by that projection. Script-boundary settlement
+/// uses [releaseConcurrentExecution] to account for handled failures.
 ///
 /// Resolving a child atomically makes its parent runnable without invalidating
 /// a currently executing sibling's lease. Ready records remain discoverable
@@ -240,6 +241,23 @@ abstract interface class WorkflowConcurrentStore {
 
   /// Lists all child records, including suspended and completed children.
   Future<List<WorkflowConcurrentStepRecord>> listConcurrentSteps(String runId);
+
+  /// Releases an execution after its script and admitted work have settled.
+  ///
+  /// When [suspended] is true, failed checkpoints do not make the run runnable:
+  /// the script's observed outcome was suspension, not an escaping failure.
+  /// Failed records remain available for diagnostics and subsequent replay.
+  /// Ready or still-running children still keep the parent runnable.
+  ///
+  /// Otherwise an active run remains runnable for retry/recovery. Terminal
+  /// outcomes are preserved. The execution token must match, and outcome
+  /// projection and lease release must be one atomic mutation. A subsequent
+  /// ordinary [FencedWorkflowStore.releaseRunExecution] must be a no-op.
+  Future<void> releaseConcurrentExecution(
+    String runId, {
+    required String executionId,
+    required bool suspended,
+  });
 
   /// Clears child records during explicit rewind/cleanup.
   Future<void> clearConcurrentSteps(String runId);

@@ -10,6 +10,9 @@
 - Verify multi-run event batches, filtering before resolution limits, resume
   payload retention after handler failure, revision CAS, and atomic checkpoint
   projection without partial writes on rejected transitions.
+- Cover mixed legacy/concurrent batches, watcher deadlines, opaque JSON
+  round trips, branch idempotency keys, handled errors, and the distinction
+  between raw future semantics and explicit parallel outcome aggregation.
 - Require Stem `>=0.6.0 <1.0.0` for the concurrent workflow contracts.
 
 ## 0.3.1

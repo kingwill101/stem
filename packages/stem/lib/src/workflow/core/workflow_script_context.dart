@@ -57,8 +57,11 @@ abstract class WorkflowScriptContext {
   /// Each branch receives an isolated checkpoint scope, so sibling branches
   /// may use the same local step names. Branches should use [step] for durable
   /// work. The join preserves the supplied names and waits for every branch,
-  /// including after an error. Branch and group traversal must be stable on
-  /// replay; code outside checkpoints can execute again after a suspension.
+  /// including after an error. An uncaught branch error takes precedence over
+  /// a sibling's suspension; errors caught inside a branch remain handled.
+  /// Ordinary `Future.wait` retains Dart's first-error semantics instead.
+  /// Branch and group traversal must be stable on replay; code outside
+  /// checkpoints can execute again after a suspension.
   Future<Map<String, T>> parallel<T>(
     Map<String, Future<T> Function(WorkflowScriptContext)> branches,
   );
