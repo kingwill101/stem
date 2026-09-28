@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- Implement `WorkflowConcurrentStore` with independent checkpoint invocations,
+  transactional execution/revision checks, immutable completed values, and
+  atomic ordinary-checkpoint projection.
+- Add the concurrent-checkpoint table migration and verify upgrades from every
+  historical schema prefix.
+- Persist sibling timer/event state and buffered payloads independently. Filter
+  matching events and due deadlines before applying resolution limits.
+- Aggregate outstanding child state on execution release, preserve terminal
+  outcomes and legacy watcher/resume APIs, and remove concurrent records during
+  administrative rewind.
+- Require Stem `>=0.6.0 <1.0.0` and adapter contracts `>=0.4.0 <1.0.0`.
+  Upgrade participating workers together before submitting concurrent runs.
+
 ## 0.3.1
 
 - Upsert repeated dead-letter task IDs transactionally, retaining the latest

@@ -46,6 +46,7 @@ import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_compensation.dart';
+import 'package:stem/src/workflow/core/workflow_concurrent_step.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_journal.dart';
@@ -392,38 +393,104 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   /// Emits an external event and resumes all runs waiting on [topic].
   ///
   /// Each resumed run receives the event as `resumeData` for the awaiting step
-  /// before being re-enqueued.
+  /// before being re-enqueued. Child batches are resolved before publishing one
+  /// continuation per run. Publication failures do not skip other ready runs.
   Future<void> emit(String topic, Map<String, Object?> payload) async {
     await _eventBus.emit(topic, payload);
     const batchSize = 256;
-    while (true) {
-      final resolutions = await _store.resolveWatchers(
-        topic,
-        payload,
-      );
-      if (resolutions.isEmpty) {
-        break;
-      }
-      for (final resolution in resolutions) {
-        final state = await _store.get(resolution.runId);
-        if (state == null) {
-          continue;
+    final pending = <String, RunState>{};
+    final excluded = <String>{};
+    (Object, StackTrace)? failure;
+
+    Future<void> consider(
+      String runId,
+      Map<String, Object?>? suspensionData,
+    ) async {
+      if (excluded.contains(runId)) return;
+      try {
+        final state = pending[runId] ?? await _store.get(runId);
+        if (state == null || state.isTerminal) {
+          pending.remove(runId);
+          excluded.add(runId);
+          return;
         }
-        final now = _clock.now();
-        if (await _maybeCancelForPolicy(state, now: now)) {
+        if (await _maybeCancelForPolicy(
+          state.copyWith(
+            status: WorkflowStatus.suspended,
+            suspensionData: suspensionData,
+          ),
+          now: _clock.now(),
+        )) {
+          pending.remove(runId);
+          excluded.add(runId);
+          return;
+        }
+        pending[runId] = state;
+      } on Object catch (error, stack) {
+        failure ??= (error, stack);
+      }
+    }
+
+    final concurrentStore = _store is WorkflowConcurrentStore
+        ? _store as WorkflowConcurrentStore
+        : null;
+    if (concurrentStore != null) {
+      try {
+        while (true) {
+          final records = await concurrentStore.resolveConcurrentEvents(
+            topic,
+            payload,
+            // Batch termination must use the same limit for custom adapters.
+            // ignore: avoid_redundant_argument_values
+            limit: batchSize,
+          );
+          for (final record in records) {
+            await consider(record.runId, record.suspensionData);
+          }
+          if (records.length < batchSize) break;
+        }
+      } on Object catch (error, stack) {
+        failure ??= (error, stack);
+      }
+    }
+    try {
+      while (true) {
+        final resolutions = await _store.resolveWatchers(
+          topic,
+          payload,
+          // Batch termination must use the same limit for custom adapters.
+          // ignore: avoid_redundant_argument_values
+          limit: batchSize,
+        );
+        for (final resolution in resolutions) {
+          await consider(resolution.runId, resolution.resumeData);
+        }
+        if (resolutions.length < batchSize) break;
+      }
+    } on Object catch (error, stack) {
+      failure ??= (error, stack);
+    }
+    // Resolve all child batches before publishing, not just the first batch
+    // containing a run. Each affected run receives at most one continuation.
+    for (final runId in pending.keys) {
+      try {
+        final state = await _store.get(runId);
+        if (state == null || state.status != WorkflowStatus.running) {
           continue;
         }
         await _enqueueRun(
-          resolution.runId,
+          runId,
           workflow: state.workflow,
           continuation: true,
           reason: WorkflowContinuationReason.event,
           runtimeMetadata: state.runtimeMetadata,
         );
+      } on Object catch (error, stack) {
+        failure ??= (error, stack);
       }
-      if (resolutions.length < batchSize) {
-        break;
-      }
+    }
+    if (failure != null) {
+      Error.throwWithStackTrace(failure!.$1, failure!.$2);
     }
   }
 
@@ -602,9 +669,46 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     int limit,
     bool enqueue,
   ) async {
-    final due = await _store.dueRuns(now, limit: limit);
     final resumed = <String>[];
     (Object, StackTrace)? failure;
+    final concurrentStore = _store is WorkflowConcurrentStore
+        ? _store as WorkflowConcurrentStore
+        : null;
+    if (concurrentStore != null) {
+      final records = await concurrentStore.resumeDueConcurrentSteps(
+        now,
+        limit: limit,
+      );
+      for (final record in records) {
+        try {
+          final state = await _store.get(record.runId);
+          if (state == null || state.isTerminal) continue;
+          if (await _maybeCancelForPolicy(
+            state.copyWith(
+              status: WorkflowStatus.suspended,
+              suspensionData: record.suspensionData,
+            ),
+            now: now,
+          )) {
+            continue;
+          }
+          if (resumed.contains(record.runId)) continue;
+          resumed.add(record.runId);
+          if (enqueue) {
+            await _enqueueRun(
+              record.runId,
+              workflow: state.workflow,
+              continuation: true,
+              reason: WorkflowContinuationReason.due,
+              runtimeMetadata: state.runtimeMetadata,
+            );
+          }
+        } on Object catch (error, stack) {
+          failure ??= (error, stack);
+        }
+      }
+    }
+    final due = await _store.dueRuns(now, limit: limit);
     for (final runId in due) {
       try {
         final state = await _store.get(runId);
@@ -1079,6 +1183,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
             '${runState.id}:${step.name}:$iteration',
           );
           final metadata = <String, Object?>{
+            ..._userSuspensionData(control.data),
             'step': step.name,
             'iteration': iteration,
             'iterationStep': step.name,
@@ -1101,10 +1206,6 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
               metadata['policyDeadlineApplied'] = true;
             }
             metadata['resumeAt'] = resumeAt.toIso8601String();
-            final controlData = control.data;
-            if (controlData != null && controlData.isNotEmpty) {
-              metadata.addAll(controlData);
-            }
             metadata.putIfAbsent('payload', () => true);
             await _store.suspendUntil(
               runId,
@@ -1150,10 +1251,6 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
                 deadline = policyDeadline;
                 metadata['policyDeadlineApplied'] = true;
               }
-            }
-            final controlData = control.data;
-            if (controlData != null && controlData.isNotEmpty) {
-              metadata.addAll(controlData);
             }
             await _store.registerWatcher(
               runId,
@@ -1251,7 +1348,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     final checkpoints = await _store.listSteps(runId);
     final completedIterations = _completedIterationCounts(checkpoints);
     Object? previousResult;
-    if (checkpoints.isNotEmpty) {
+    if (_store is! WorkflowConcurrentStore && checkpoints.isNotEmpty) {
       previousResult =
           definition
               .checkpointByName(checkpoints.last.baseName)
@@ -1266,14 +1363,35 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       completedIterations: completedIterations,
       definition: definition,
       previousResult: previousResult,
-      initialStepIndex: checkpoints.length,
+      // Invocation ordinals are allocated by the script, not reconstructed
+      // from the number of completed legacy rows.  This is important when a
+      // sibling is still suspended (and for records whose value is null).
+      initialStepIndex: 0,
+      legacyCheckpoints: {
+        for (final checkpoint in checkpoints) checkpoint.name: checkpoint.value,
+      },
       suspensionData: runState.suspensionData,
       policy: runState.cancellationPolicy,
     );
 
+    var suspended = false;
     try {
-      final result = await script(execution);
+      Object? result;
+      Object? scriptError;
+      StackTrace? scriptStack;
+      try {
+        result = await script(execution);
+      } on Object catch (error, stack) {
+        scriptError = error;
+        scriptStack = stack;
+      } finally {
+        await execution.drainSteps();
+      }
+      if (scriptError != null) {
+        Error.throwWithStackTrace(scriptError, scriptStack!);
+      }
       if (execution.wasSuspended) {
+        suspended = true;
         return;
       }
       final storedWorkflowResult = definition.encodeResult(result);
@@ -1281,24 +1399,38 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     } on _WorkflowLeaseLost {
       return;
     } on _WorkflowScriptSuspended {
+      suspended = true;
       return;
     } on WorkflowJournalConflict {
       // A superseding execution owns the journal claim. Do not report the
       // stale worker's control flow as a workflow failure.
       return;
     } catch (error, stack) {
+      // An eager-error join may return before its siblings. Drain before
+      // recording failure or releasing the claim.
+      await execution.drainSteps();
       await _failAttempt(
         runState,
         error,
         stack,
         executionClaim,
-        stepName: execution.lastStepName,
+        stepName: execution.failureStep(error, stack) ?? execution.lastStepName,
       );
       rethrow;
     } finally {
       // Suspension exits the script before a completed/failed step can
       // consume its start timestamp. Do not retain timers across executions.
       _stepMetricStarts.removeWhere((key, _) => key.startsWith('$runId:'));
+      final concurrentStore = _store;
+      if (concurrentStore is WorkflowConcurrentStore &&
+          executionClaim != null) {
+        await (concurrentStore as WorkflowConcurrentStore)
+            .releaseConcurrentExecution(
+              runId,
+              executionId: executionClaim.executionId,
+              suspended: suspended,
+            );
+      }
     }
   }
 
@@ -1308,12 +1440,14 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     RunState runState,
     String stepName, {
     int? iteration,
+    String? invocationId,
     Object? result,
     String? error,
     Map<String, Object?>? metadata,
   }) async {
     final tags = {'workflow': runState.workflow, 'step': stepName};
-    final metricKey = '${runState.id}:$stepName:${iteration ?? 0}';
+    final metricKey =
+        '${runState.id}:${invocationId ?? '$stepName:${iteration ?? 0}'}';
     switch (type) {
       case WorkflowStepEventType.started:
         StemMetrics.instance.increment(
@@ -1360,7 +1494,12 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
           iteration: iteration,
           result: result,
           error: error,
-          metadata: metadata == null ? null : Map.unmodifiable(metadata),
+          metadata: metadata == null && invocationId == null
+              ? null
+              : Map.unmodifiable({
+                  ...?metadata,
+                  'invocationId': ?invocationId,
+                }),
         ),
       );
     } on Object catch (_) {
@@ -2208,6 +2347,31 @@ class _WorkflowRunTaskHandler
   }
 }
 
+/// Runtime-owned routing and timing fields cannot be supplied as user data.
+/// Arbitrary names remain available inside the opaque `payload` field.
+Map<String, Object?> _userSuspensionData(Map<String, Object?>? data) {
+  const reserved = {
+    'step',
+    'iteration',
+    'iterationStep',
+    'type',
+    'topic',
+    'dueAt',
+    'resumeAt',
+    'deadline',
+    'requestedResumeAt',
+    'suspendedAt',
+    'resumeReason',
+    'deliveredAt',
+    'policyDeadline',
+    'policyDeadlineApplied',
+  };
+  return {
+    for (final entry in (data ?? const <String, Object?>{}).entries)
+      if (!reserved.contains(entry.key)) entry.key: entry.value,
+  };
+}
+
 /// Script-based workflow execution adapter with checkpointing and suspension.
 class _WorkflowScriptExecution
     implements WorkflowScriptContext, WorkflowScriptJournalContext {
@@ -2222,6 +2386,11 @@ class _WorkflowScriptExecution
     required int initialStepIndex,
     required this.policy,
     Map<String, Object?>? suspensionData,
+    this.branch = '',
+    this.parent,
+    this.legacyCheckpoints = const {},
+    Set<Future<Object?>>? activeSteps,
+    List<(Object, StackTrace, String)>? failureAttribution,
   }) : _completedIterations = Map<String, int>.from(completedIterations),
        _previousResult = previousResult,
        _stepIndex = initialStepIndex,
@@ -2231,7 +2400,9 @@ class _WorkflowScriptExecution
            (suspensionData?['iterationStep'] ?? suspensionData?['step'])
                as String?,
        _suspensionIteration = suspensionData?['iteration'] as int?,
-       clock = runtime.clock;
+       clock = runtime.clock,
+       _activeSteps = activeSteps ?? <Future<Object?>>{},
+       _failureAttribution = failureAttribution ?? [];
 
   final WorkflowRuntime runtime;
   final WorkflowDefinition definition;
@@ -2239,9 +2410,22 @@ class _WorkflowScriptExecution
   final TaskContext? taskContext;
   final WorkflowExecutionClaim? executionClaim;
   final Map<String, int> _completedIterations;
+  final Map<String, int> _invocationIterations = {};
+  int _parallelIndex = 0;
+  final Set<Future<Object?>> _activeSteps;
+  // Observing a future cannot tell whether application code catches its error.
+  // Keep this information only for diagnostics, never for outcome selection.
+  final List<(Object, StackTrace, String)> _failureAttribution;
+
+  /// Path of a named branch.  A branch is a real invocation scope, rather
+  /// than another view of the parent context.
+  final String branch;
+  final _WorkflowScriptExecution? parent;
+  final Map<String, Object?> legacyCheckpoints;
   final WorkflowCancellationPolicy? policy;
   final WorkflowClock clock;
   Object? _previousResult;
+  int _lastResultIndex = -1;
   int _stepIndex;
   bool _wasSuspended = false;
   String? _lastStepName;
@@ -2249,12 +2433,45 @@ class _WorkflowScriptExecution
   int? _suspensionIteration;
   Object? _resumePayload;
   final bool _eventDeadline;
+  WorkflowConcurrentStore? get _concurrentStore =>
+      runtime._store is WorkflowConcurrentStore
+      ? runtime._store as WorkflowConcurrentStore
+      : null;
+  String get _branchPath => branch;
+  String _invocationId(String name, int index, int iteration) {
+    return StepInvocationId.scoped(
+      branchPath: branch.isEmpty ? const [] : [branch],
+      stepName: name,
+      iteration: iteration,
+    ).value;
+  }
 
   /// Whether a script checkpoint suspended the run.
   bool get wasSuspended => _wasSuspended;
 
+  void _markSuspended() {
+    _wasSuspended = true;
+    parent?._markSuspended();
+  }
+
+  void _publishResult(int index, Object? value) {
+    if (index >= _lastResultIndex) {
+      _lastResultIndex = index;
+      _previousResult = value;
+    }
+  }
+
   /// Last executed checkpoint name, if any.
   String? get lastStepName => _lastStepName;
+
+  String? failureStep(Object error, StackTrace stack) {
+    for (final entry in _failureAttribution) {
+      if (identical(entry.$1, error) && identical(entry.$2, stack)) {
+        return entry.$3;
+      }
+    }
+    return null;
+  }
 
   @override
   Map<String, Object?> get params => runState.workflowParams;
@@ -2270,11 +2487,96 @@ class _WorkflowScriptExecution
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
-  }) => _step(
-    name,
-    handler,
-    autoVersion: autoVersion,
-  );
+  }) {
+    if (_concurrentStore == null && _activeSteps.isNotEmpty) {
+      return Future.error(
+        UnsupportedError('Concurrent steps require WorkflowConcurrentStore.'),
+      );
+    }
+    // Allocate traversal order at invocation, not after handler completion.
+    // Durable identity is a separate branch/name/iteration key.
+    final index = _stepIndex++;
+    final previous = _previousResult;
+    final future = _step(
+      name,
+      handler,
+      autoVersion: autoVersion,
+      invocationIndex: index,
+      previousResult: previous,
+    );
+    return _trackStep(future, name);
+  }
+
+  @override
+  Future<Map<String, T>> parallel<T>(
+    Map<String, Future<T> Function(WorkflowScriptContext)> branches,
+  ) => _trackStep(_parallel(branches), '<parallel>');
+
+  Future<Map<String, T>> _parallel<T>(
+    Map<String, Future<T> Function(WorkflowScriptContext)> branches,
+  ) async {
+    if (_concurrentStore == null) {
+      throw UnsupportedError(
+        'Durable parallel branches require WorkflowConcurrentStore.',
+      );
+    }
+    final group = _parallelIndex++;
+    final entries = branches.entries.toList(growable: false);
+    final outcomes =
+        await Future.wait<({T? value, (Object, StackTrace)? failure})>(
+          entries.map((entry) async {
+            final child = _child(group, entry.key);
+            try {
+              return (value: await entry.value(child), failure: null);
+            } on Object catch (error, stack) {
+              return (value: null, failure: (error, stack));
+            }
+          }),
+        );
+    final failures = outcomes.map((outcome) => outcome.failure).nonNulls;
+    // An explicit join sees branch outcomes, unlike an observer on arbitrary
+    // Dart futures. Honor catches inside a branch, but never let a suspension
+    // mask an exception which escaped another branch. Claim loss has priority.
+    final failure =
+        failures
+            .where(
+              (entry) =>
+                  entry.$1 is _WorkflowLeaseLost ||
+                  entry.$1 is WorkflowJournalConflict,
+            )
+            .firstOrNull ??
+        failures
+            .where((entry) => entry.$1 is! _WorkflowScriptSuspended)
+            .firstOrNull ??
+        failures.firstOrNull;
+    if (failure != null) {
+      Error.throwWithStackTrace(failure.$1, failure.$2);
+    }
+    return <String, T>{
+      for (var index = 0; index < entries.length; index++)
+        entries[index].key: outcomes[index].value as T,
+    };
+  }
+
+  _WorkflowScriptExecution _child(int group, String name) {
+    final childBranch = jsonEncode([_branchPath, group, name]);
+    return _WorkflowScriptExecution(
+      runtime: runtime,
+      definition: definition,
+      runState: runState,
+      taskContext: taskContext,
+      executionClaim: executionClaim,
+      completedIterations: _completedIterations,
+      previousResult: _previousResult,
+      initialStepIndex: 0,
+      policy: policy,
+      branch: childBranch,
+      parent: this,
+      legacyCheckpoints: legacyCheckpoints,
+      activeSteps: _activeSteps,
+      failureAttribution: _failureAttribution,
+    );
+  }
 
   @override
   Future<T> stepWithRetry<T>(
@@ -2283,17 +2585,74 @@ class _WorkflowScriptExecution
     required WorkflowRetryPolicy retryPolicy,
     bool autoVersion = false,
     WorkflowCompensationRegistration? Function(T result)? compensationForResult,
-  }) => _step(
-    name,
-    handler,
-    autoVersion: autoVersion,
-    retryPolicy: retryPolicy,
-    compensationForResult: compensationForResult,
-  );
+  }) {
+    if (_concurrentStore == null && _activeSteps.isNotEmpty) {
+      return Future.error(
+        UnsupportedError('Concurrent steps require WorkflowConcurrentStore.'),
+      );
+    }
+    final index = _stepIndex++;
+    final previous = _previousResult;
+    final future = _step(
+      name,
+      handler,
+      autoVersion: autoVersion,
+      retryPolicy: retryPolicy,
+      compensationForResult: compensationForResult,
+      invocationIndex: index,
+      previousResult: previous,
+    );
+    return _trackStep(future, name);
+  }
+
+  Future<T> _trackStep<T>(Future<T> future, String name) {
+    late final Future<T> tracked;
+    tracked = future.then<T>(
+      (value) {
+        _activeSteps.remove(tracked);
+        return value;
+      },
+      onError: (Object error, StackTrace stack) {
+        _activeSteps.remove(tracked);
+        if (error is! _WorkflowScriptSuspended &&
+            error is! _WorkflowLeaseLost &&
+            error is! WorkflowJournalConflict) {
+          _failureAttribution.add((error, stack, name));
+        }
+        Error.throwWithStackTrace(error, stack);
+      },
+    );
+    _activeSteps.add(tracked);
+    // Observe errors even when script code has not yet attached its join.
+    // Removal occurs before the caller-visible future completes, not in this
+    // observer, so sequential legacy calls cannot see an already-finished step.
+    unawaited(
+      tracked.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
+    return tracked;
+  }
+
+  /// Waits for all handlers admitted by this script invocation.
+  ///
+  /// This is intentionally a drain, rather than cancellation: Dart futures
+  /// cannot cancel arbitrary user handlers, and finalizing a run while a
+  /// sibling is still persisting would corrupt its journal.
+  Future<void> drainSteps() async {
+    while (_activeSteps.isNotEmpty) {
+      final pending = List<Future<Object?>>.of(_activeSteps);
+      await Future.wait(
+        pending.map(
+          (future) => future.catchError((Object _, StackTrace _) => null),
+        ),
+      );
+    }
+  }
 
   Future<T> _step<T>(
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
+    required int invocationIndex,
+    required Object? previousResult,
     bool autoVersion = false,
     WorkflowRetryPolicy? retryPolicy,
     WorkflowCompensationRegistration? Function(T result)? compensationForResult,
@@ -2316,9 +2675,103 @@ class _WorkflowScriptExecution
       }
     }
     final iteration = autoVersion ? _nextIteration(name) : 0;
-    final checkpointName = autoVersion
+    final checkpointName = branch.isNotEmpty
+        ? _invocationId(name, invocationIndex, iteration)
+        : autoVersion
         ? runtime._versionedName(name, iteration)
         : name;
+    final concurrent = _concurrentStore;
+    final declaredCheckpoint = definition.checkpointByName(name);
+    WorkflowConcurrentStepRecord? record;
+    Object? concurrentResume;
+    var concurrentResuming = false;
+    var concurrentTimeout = false;
+    DateTime? resumedSleepAt;
+    if (concurrent != null) {
+      if (executionClaim == null) {
+        throw StateError(
+          'WorkflowConcurrentStore requires a fenced execution claim.',
+        );
+      }
+      final invocationId = _invocationId(name, invocationIndex, iteration);
+      record = await concurrent.readConcurrentStep(runId, invocationId);
+      if (record == null && legacyCheckpoints.containsKey(checkpointName)) {
+        final value = legacyCheckpoints[checkpointName];
+        final decoded = declaredCheckpoint?.decodeValue(value) ?? value;
+        _publishResult(invocationIndex, decoded);
+        return decoded as T;
+      }
+      if (record != null &&
+          record.status == WorkflowConcurrentStepStatus.completed) {
+        final value = record.value;
+        final decoded = declaredCheckpoint?.decodeValue(value) ?? value;
+        _publishResult(invocationIndex, decoded);
+        return decoded as T;
+      }
+      if (record?.status == WorkflowConcurrentStepStatus.suspended) {
+        _markSuspended();
+        throw const _WorkflowScriptSuspended();
+      }
+      if (record?.status == WorkflowConcurrentStepStatus.ready ||
+          (record != null &&
+              (record.status == WorkflowConcurrentStepStatus.running ||
+                  record.status == WorkflowConcurrentStepStatus.failed) &&
+              record.suspensionData?['type'] != null)) {
+        concurrentResuming = true;
+        concurrentTimeout =
+            record!.suspensionData?['resumeReason'] == 'eventDeadline';
+        concurrentResume = record.suspensionData?['payload'];
+        final rawResumeAt = record.suspensionData?['resumeAt'];
+        if (record.suspensionData?['type'] == 'sleep' &&
+            rawResumeAt is String) {
+          resumedSleepAt = DateTime.tryParse(rawResumeAt);
+        }
+      }
+      final executionId = executionClaim?.executionId ?? runtime._runtimeId;
+      if (record == null) {
+        if (branch.isEmpty &&
+            _suspensionStep == name &&
+            (!autoVersion ||
+                _suspensionIteration == null ||
+                _suspensionIteration == iteration)) {
+          concurrentResuming = true;
+          concurrentTimeout = _eventDeadline;
+          concurrentResume = _takeResumePayload(
+            name,
+            autoVersion ? iteration : null,
+          );
+        }
+        record = WorkflowConcurrentStepRecord(
+          runId: runId,
+          invocationId: invocationId,
+          branch: _branchPath,
+          stepName: name,
+          stepIndex: invocationIndex,
+          iteration: iteration,
+          revision: 1,
+          status: WorkflowConcurrentStepStatus.running,
+          executionId: executionId,
+          updatedAt: clock.now(),
+        );
+        record = await concurrent.writeConcurrentStep(
+          record,
+          executionId: executionId,
+        );
+      } else {
+        final next = _concurrentUpdate(
+          record,
+          status: WorkflowConcurrentStepStatus.running,
+          executionId: executionId,
+          suspensionData: record.suspensionData,
+          updatedAt: clock.now(),
+        );
+        record = await concurrent.writeConcurrentStep(
+          next,
+          expectedRevision: record.revision,
+          executionId: executionId,
+        );
+      }
+    }
 
     if (iteration > 0) {
       await runtime._recordStepEvent(
@@ -2326,6 +2779,7 @@ class _WorkflowScriptExecution
         runState,
         name,
         iteration: iteration,
+        invocationId: record?.invocationId,
       );
     }
     await runtime._store.markRunning(runId, stepName: name);
@@ -2335,6 +2789,7 @@ class _WorkflowScriptExecution
       runState,
       name,
       iteration: iteration,
+      invocationId: record?.invocationId,
     );
     await runtime._signals.workflowRunResumed(
       WorkflowRunPayload(
@@ -2345,14 +2800,12 @@ class _WorkflowScriptExecution
       ),
     );
 
-    final declaredCheckpoint = definition.checkpointByName(name);
-    final cached = await runtime._store.readStep<Object?>(
-      runId,
-      checkpointName,
-    );
+    final cached = concurrent == null
+        ? await runtime._store.readStep<Object?>(runId, checkpointName)
+        : null;
     if (cached != null) {
       final decodedCached = declaredCheckpoint?.decodeValue(cached) ?? cached;
-      _previousResult = decodedCached;
+      _publishResult(invocationIndex, decodedCached);
       await runtime._recordStepEvent(
         WorkflowStepEventType.completed,
         runState,
@@ -2360,37 +2813,44 @@ class _WorkflowScriptExecution
         iteration: iteration,
         result: cached,
         metadata: const {'replayed': true},
+        invocationId: record?.invocationId,
       );
       if (autoVersion) {
         _completedIterations[name] = iteration + 1;
       } else {
         _completedIterations[name] = 1;
       }
-      _stepIndex += 1;
       await runtime._extendLeases(taskContext, runId, executionClaim);
       return decodedCached as T;
     }
 
-    final isResuming =
-        _suspensionStep == name &&
-        (!autoVersion ||
-            _suspensionIteration == null ||
-            _suspensionIteration == iteration);
-    final resumeData = _takeResumePayload(name, autoVersion ? iteration : null);
+    final isResuming = concurrent != null
+        ? concurrentResuming
+        : _suspensionStep == name &&
+              (!autoVersion ||
+                  _suspensionIteration == null ||
+                  _suspensionIteration == iteration);
+    final resumeData = concurrent != null
+        ? concurrentResume
+        : _takeResumePayload(name, autoVersion ? iteration : null);
     final stepMeta = runtime._stepMeta(
       runState: runState,
       stepName: name,
-      stepIndex: _stepIndex,
+      stepIndex: invocationIndex,
       iteration: iteration,
     );
     final stepContext = _WorkflowScriptStepContextImpl(
       execution: this,
       stepName: name,
-      stepIndex: _stepIndex,
+      stepIndex: invocationIndex,
+      previousResult: previousResult,
       iteration: iteration,
       resumeData: resumeData,
+      resumedSleepAt: resumedSleepAt,
       isResuming: isResuming,
-      isEventTimeout: isResuming && _eventDeadline,
+      isEventTimeout:
+          isResuming &&
+          (concurrent != null ? concurrentTimeout : _eventDeadline),
       enqueuer: runtime._stepEnqueuer(
         taskContext: taskContext,
         baseMeta: stepMeta,
@@ -2427,9 +2887,20 @@ class _WorkflowScriptExecution
         final replayed =
             declaredCheckpoint?.decodeValue(attempt.entry.data['value']) ??
             attempt.entry.data['value'];
-        _previousResult = replayed;
+        if (concurrent != null && record != null) {
+          await concurrent.writeConcurrentStep(
+            _concurrentUpdate(
+              record,
+              status: WorkflowConcurrentStepStatus.completed,
+              executionId: claim.executionId,
+              value: attempt.entry.data['value'],
+            ),
+            expectedRevision: record.revision,
+            executionId: claim.executionId,
+          );
+        }
+        _publishResult(invocationIndex, replayed);
         _completedIterations[name] = autoVersion ? iteration + 1 : 1;
-        _stepIndex += 1;
         return replayed as T;
       }
       if (attempt.state == 'exhausted') {
@@ -2450,6 +2921,7 @@ class _WorkflowScriptExecution
             ),
             name,
             iteration,
+            record: record,
           );
         } else if (attempt.state == 'running') {
           // Another worker owns the durable body claim.
@@ -2490,6 +2962,7 @@ class _WorkflowScriptExecution
             name,
             iteration: iteration,
             error: error.toString(),
+            invocationId: record?.invocationId,
           );
           if (failed.state == 'exhausted') {
             throw WorkflowStepRetryExhausted(
@@ -2509,6 +2982,7 @@ class _WorkflowScriptExecution
               ),
               name,
               iteration,
+              record: record,
             );
           }
           throw const _WorkflowScriptSuspended();
@@ -2531,10 +3005,22 @@ class _WorkflowScriptExecution
         name,
         iteration: iteration,
         result: storedResult,
+        invocationId: record?.invocationId,
       );
+      if (concurrent != null && record != null) {
+        await concurrent.writeConcurrentStep(
+          _concurrentUpdate(
+            record,
+            status: WorkflowConcurrentStepStatus.completed,
+            executionId: claim.executionId,
+            value: storedResult,
+          ),
+          expectedRevision: record.revision,
+          executionId: claim.executionId,
+        );
+      }
       _completedIterations[name] = autoVersion ? iteration + 1 : 1;
-      _previousResult = result;
-      _stepIndex += 1;
+      _publishResult(invocationIndex, result);
       return result;
     }
 
@@ -2548,6 +3034,21 @@ class _WorkflowScriptExecution
     } on WorkflowSuspensionSignal {
       suspendedBySignal = true;
     } catch (error, stack) {
+      if (concurrent != null && record != null) {
+        final executionId = executionClaim?.executionId ?? runtime._runtimeId;
+        final failed = _concurrentUpdate(
+          record,
+          status: WorkflowConcurrentStepStatus.failed,
+          executionId: executionId,
+          error: error.toString(),
+          stack: stack.toString(),
+        );
+        await _concurrentStore!.writeConcurrentStep(
+          failed,
+          expectedRevision: record.revision,
+          executionId: executionId,
+        );
+      }
       final outcome = await runtime._markFailed(
         runId,
         error,
@@ -2561,6 +3062,7 @@ class _WorkflowScriptExecution
           name,
           iteration: iteration,
           error: error.toString(),
+          invocationId: record?.invocationId,
         );
       }
       Error.throwWithStackTrace(error, stack);
@@ -2569,7 +3071,7 @@ class _WorkflowScriptExecution
     final control = stepContext.takeControl();
     if (control != null) {
       if (control.type != _ScriptControlType.continueRun) {
-        await _suspend(control, name, iteration);
+        await _suspend(control, name, iteration, record: record);
         throw const _WorkflowScriptSuspended();
       }
     }
@@ -2581,7 +3083,23 @@ class _WorkflowScriptExecution
     }
 
     final storedResult = declaredCheckpoint?.encodeValue(result) ?? result;
-    await runtime._store.saveStep(runId, checkpointName, storedResult);
+    if (concurrent != null && record != null) {
+      final executionId = executionClaim?.executionId ?? runtime._runtimeId;
+      final next = _concurrentUpdate(
+        record,
+        status: WorkflowConcurrentStepStatus.completed,
+        executionId: executionId,
+        value: storedResult,
+      );
+      await concurrent.writeConcurrentStep(
+        next,
+        expectedRevision: record.revision,
+        executionId: executionId,
+        checkpointName: checkpointName,
+      );
+    } else {
+      await runtime._store.saveStep(runId, checkpointName, storedResult);
+    }
     await runtime._extendLeases(taskContext, runId, executionClaim);
     await runtime._recordStepEvent(
       WorkflowStepEventType.completed,
@@ -2589,19 +3107,52 @@ class _WorkflowScriptExecution
       name,
       iteration: iteration,
       result: storedResult,
+      invocationId: record?.invocationId,
     );
     if (autoVersion) {
       _completedIterations[name] = iteration + 1;
     } else {
       _completedIterations[name] = 1;
     }
-    _previousResult = result;
-    _stepIndex += 1;
+    _publishResult(invocationIndex, result);
     return result;
+  }
+
+  WorkflowConcurrentStepRecord _concurrentUpdate(
+    WorkflowConcurrentStepRecord record, {
+    required WorkflowConcurrentStepStatus status,
+    required String executionId,
+    Object? value,
+    Map<String, Object?>? suspensionData,
+    String? error,
+    String? stack,
+    DateTime? updatedAt,
+  }) {
+    return WorkflowConcurrentStepRecord(
+      runId: record.runId,
+      invocationId: record.invocationId,
+      branch: record.branch,
+      stepName: record.stepName,
+      stepIndex: record.stepIndex,
+      iteration: record.iteration,
+      revision: record.revision + 1,
+      status: status,
+      executionId: executionId,
+      value: value,
+      suspensionData: suspensionData ?? record.suspensionData,
+      error: error,
+      stack: stack,
+      updatedAt: updatedAt ?? clock.now(),
+    );
   }
 
   /// Computes the next iteration for an auto-versioned checkpoint.
   int _nextIteration(String name) {
+    if (_concurrentStore != null) {
+      final next = _invocationIterations[name] ?? 0;
+      _invocationIterations[name] = next + 1;
+      return next;
+    }
     final completed = _completedIterations[name] ?? 0;
     if (_suspensionStep == name && _suspensionIteration != null) {
       return _suspensionIteration!;
@@ -2629,19 +3180,18 @@ class _WorkflowScriptExecution
   Future<void> _suspend(
     _ScriptControl control,
     String stepName,
-    int iteration,
-  ) async {
+    int iteration, {
+    WorkflowConcurrentStepRecord? record,
+  }) async {
     if (control.type == _ScriptControlType.continueRun) {
       return;
     }
     final metadata = <String, Object?>{
+      ..._userSuspensionData(control.data),
       'step': stepName,
       'iteration': iteration,
       'iterationStep': stepName,
     };
-    if (control.data != null && control.data!.isNotEmpty) {
-      metadata.addAll(control.data!);
-    }
     final now = clock.now();
     metadata['suspendedAt'] = now.toIso8601String();
     DateTime? policyDeadline;
@@ -2649,6 +3199,52 @@ class _WorkflowScriptExecution
     if (suspendLimit != null) {
       policyDeadline = now.add(suspendLimit);
       metadata['policyDeadline'] = policyDeadline.toIso8601String();
+    }
+    if (_concurrentStore != null && record != null) {
+      DateTime? deadline;
+      if (control.type == _ScriptControlType.sleep) {
+        deadline = now.add(control.delay!);
+        metadata['type'] = 'sleep';
+        metadata['resumeAt'] = deadline.toIso8601String();
+        metadata.putIfAbsent('payload', () => true);
+      } else if (control.type == _ScriptControlType.waitForEvent) {
+        deadline = control.deadline;
+        metadata['type'] = 'event';
+        metadata['topic'] = control.topic;
+        if (deadline != null) metadata['deadline'] = deadline.toIso8601String();
+      }
+      if (policyDeadline != null &&
+          (deadline == null || policyDeadline.isBefore(deadline))) {
+        deadline = policyDeadline;
+        metadata['policyDeadlineApplied'] = true;
+        metadata[control.type == _ScriptControlType.sleep
+            ? 'resumeAt'
+            : 'deadline'] = deadline
+            .toIso8601String();
+      }
+      final executionId = executionClaim?.executionId ?? runtime._runtimeId;
+      final next = _concurrentUpdate(
+        record,
+        status: WorkflowConcurrentStepStatus.suspended,
+        executionId: executionId,
+        suspensionData: metadata,
+      );
+      await _concurrentStore!.writeConcurrentStep(
+        next,
+        expectedRevision: record.revision,
+        executionId: executionId,
+      );
+      _markSuspended();
+      await runtime._signals.workflowRunSuspended(
+        WorkflowRunPayload(
+          runId: runId,
+          workflow: workflow,
+          status: WorkflowRunStatus.suspended,
+          step: stepName,
+          metadata: metadata,
+        ),
+      );
+      return;
     }
     if (control.type == _ScriptControlType.sleep) {
       final requestedResumeAt = now.add(control.delay!);
@@ -2739,7 +3335,7 @@ class _WorkflowScriptExecution
         ),
       );
     }
-    _wasSuspended = true;
+    _markSuspended();
   }
 
   /// Previously completed checkpoint result, if any.
@@ -2751,6 +3347,9 @@ class _WorkflowScriptExecution
     final effectiveScope = (scope == null || scope.isEmpty)
         ? defaultScope
         : scope;
+    if (branch.isNotEmpty) {
+      return '$workflow/$runId/${Uri.encodeComponent(branch)}/$effectiveScope';
+    }
     return '$workflow/$runId/$effectiveScope';
   }
 }
@@ -2763,8 +3362,10 @@ class _WorkflowScriptStepContextImpl
     required String stepName,
     required int stepIndex,
     required int iteration,
+    required this.previousResult,
     required this.isResuming,
     required this.isEventTimeout,
+    this.resumedSleepAt,
     Object? resumeData,
     this.enqueuer,
     this.workflows,
@@ -2777,6 +3378,8 @@ class _WorkflowScriptStepContextImpl
   final String _stepName;
   final int _stepIndex;
   final int _iteration;
+  @override
+  final Object? previousResult;
   _ScriptControl? _control;
   Object? _resumeData;
 
@@ -2785,6 +3388,7 @@ class _WorkflowScriptStepContextImpl
 
   @override
   final bool isEventTimeout;
+  final DateTime? resumedSleepAt;
 
   @override
   Future<String> enqueueValue<T>(
@@ -2849,6 +3453,12 @@ class _WorkflowScriptStepContextImpl
   @override
   /// Suspends the run until the sleep duration elapses.
   Future<void> sleep(Duration duration, {Map<String, Object?>? data}) async {
+    final completedSleep = resumedSleepAt;
+    if (completedSleep != null &&
+        !completedSleep.isAfter(execution.clock.now())) {
+      _control = const _ScriptControl.continueRun();
+      return;
+    }
     final resume = _resumeData;
     if (resume is Map<String, Object?>) {
       final type = resume['type'];
@@ -2873,9 +3483,6 @@ class _WorkflowScriptStepContextImpl
 
   @override
   Map<String, Object?> get params => execution.params;
-
-  @override
-  Object? get previousResult => execution.previousResult;
 
   @override
   /// Returns and clears any resume payload supplied to this step.

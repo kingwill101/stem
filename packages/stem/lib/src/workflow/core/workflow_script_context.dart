@@ -41,11 +41,30 @@ abstract class WorkflowScriptContext {
   /// Invokes or replays a workflow checkpoint. The provided [handler]
   /// persists its return value and the resolved value is replayed on
   /// subsequent runs.
+  ///
+  /// Overlapping calls with distinct names require a store implementing
+  /// `WorkflowConcurrentStore`. Use [parallel] for isolated branch scopes.
+  /// Repeated concurrent calls to one name require [autoVersion]; iteration
+  /// numbers are allocated in invocation order, not completion order.
   Future<T> step<T>(
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
   });
+
+  /// Runs named branches concurrently and joins their results.
+  ///
+  /// Each branch receives an isolated checkpoint scope, so sibling branches
+  /// may use the same local step names. Branches should use [step] for durable
+  /// work. The join preserves the supplied names and waits for every branch,
+  /// including after an error. An uncaught branch error takes precedence over
+  /// a sibling's suspension; errors caught inside a branch remain handled.
+  /// Ordinary `Future.wait` retains Dart's first-error semantics instead.
+  /// Branch and group traversal must be stable on replay; code outside
+  /// checkpoints can execute again after a suspension.
+  Future<Map<String, T>> parallel<T>(
+    Map<String, Future<T> Function(WorkflowScriptContext)> branches,
+  );
 }
 
 /// Optional journal-backed checkpoint retry capability.
@@ -393,7 +412,9 @@ abstract class WorkflowScriptStepContext implements WorkflowExecutionContext {
   @override
   String get stepName;
 
-  /// Zero-based checkpoint index in the workflow definition.
+  /// Zero-based invocation ordinal within this script or branch scope.
+  ///
+  /// This is traversal metadata, not persistence identity or completion order.
   @override
   int get stepIndex;
 
@@ -405,7 +426,10 @@ abstract class WorkflowScriptStepContext implements WorkflowExecutionContext {
   @override
   Map<String, Object?> get params;
 
-  /// Result of the previous checkpoint, if any.
+  /// Snapshot of the latest completed result in this scope's invocation order.
+  ///
+  /// It is captured when this step is called and cannot change while its
+  /// handler awaits. Prefer explicit returned values for cross-branch inputs.
   @override
   Object? get previousResult;
 

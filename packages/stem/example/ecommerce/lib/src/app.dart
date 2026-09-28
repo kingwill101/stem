@@ -19,8 +19,8 @@ class EcommerceServer {
   EcommerceServer._({
     required this.workflowApp,
     required this.repository,
-    required Handler handler,
-  }) : _handler = handler;
+    required this._handler,
+  });
 
   final StemWorkflowApp workflowApp;
   final EcommerceRepository repository;

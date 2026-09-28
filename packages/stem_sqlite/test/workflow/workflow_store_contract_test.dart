@@ -26,6 +26,10 @@ void main() {
     },
   );
   runWorkflowStoreContractTests(adapterName: 'sqlite', factory: sqliteFactory);
+  runWorkflowConcurrencyContractTests(
+    adapterName: 'sqlite',
+    factory: sqliteFactory,
+  );
   runWorkflowTerminalContractTests(
     adapterName: 'sqlite',
     factory: sqliteFactory,

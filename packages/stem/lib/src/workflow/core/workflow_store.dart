@@ -1,5 +1,6 @@
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_concurrent_step.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_step_entry.dart';
 import 'package:stem/src/workflow/core/workflow_watcher.dart';
@@ -173,6 +174,95 @@ abstract class WorkflowStore {
 abstract interface class WorkflowRunChanges {
   /// Watches complete change notifications for [runId].
   Stream<void> watchRunChanges(String runId);
+}
+
+/// Optional persistence capability for concurrent script checkpoints.
+///
+/// Each invocation is an independent state machine keyed by
+/// `(runId, invocationId)`. Implementations must apply every mutation
+/// atomically and reject stale `executionId`/`revision` values. In particular,
+/// event and timer resolution must transition each matching child independently
+/// and retain its payload; they must never overwrite a sibling's suspension.
+///
+/// This capability requires [FencedWorkflowStore]. Writes validate the current,
+/// unexpired run execution claim, not just the token copied into the record.
+/// Revision one inserts a new invocation; every mutation advances by one.
+///
+/// A child suspension does not release the parent execution lease. On ordinary
+/// release, stores project the outstanding children onto the run: ready,
+/// running, pending, or failed children keep it runnable; only suspended
+/// children leave it suspended at the earliest remaining deadline. Terminal
+/// run states are never changed by that projection. Script-boundary settlement
+/// uses [releaseConcurrentExecution] to account for handled failures.
+///
+/// Resolving a child atomically makes its parent runnable without invalidating
+/// a currently executing sibling's lease. Ready records remain discoverable
+/// even if enqueueing a continuation fails. The singleton fields on [RunState]
+/// are a diagnostic projection, never the source of a child's resume payload.
+abstract interface class WorkflowConcurrentStore {
+  /// Reads one invocation, or `null` when it has not been admitted.
+  Future<WorkflowConcurrentStepRecord?> readConcurrentStep(
+    String runId,
+    String invocationId,
+  );
+
+  /// Inserts or advances a record using its expected revision and execution
+  /// fence. A completed record is immutable. A null or zero [expectedRevision]
+  /// means insert only; otherwise it must match the stored revision.
+  ///
+  /// When supplied, [checkpointName] atomically projects a completed value into
+  /// the ordinary checkpoint view. It must not be a separate unfenced write.
+  Future<WorkflowConcurrentStepRecord> writeConcurrentStep(
+    WorkflowConcurrentStepRecord record, {
+    required String executionId,
+    int? expectedRevision,
+    String? checkpointName,
+  });
+
+  /// Resolves event waits independently, buffering one payload per invocation.
+  ///
+  /// The limit counts matching active waits, not unrelated candidate records.
+  /// A non-positive limit does not resolve or mutate any waits.
+  /// Events are broadcast to already registered waits; this is not an inbox
+  /// for events emitted before a watcher is registered.
+  Future<List<WorkflowConcurrentStepRecord>> resolveConcurrentEvents(
+    String topic,
+    Map<String, Object?> payload, {
+    int limit = 256,
+  });
+
+  /// Resolves due sleep/deadline waits independently, preserving their metadata.
+  ///
+  /// Event deadlines set `resumeReason: eventDeadline`. Only due, active waits
+  /// count against [limit]; a future timer cannot hide another due timer.
+  /// A non-positive limit does not resolve or mutate any waits.
+  Future<List<WorkflowConcurrentStepRecord>> resumeDueConcurrentSteps(
+    DateTime now, {
+    int limit = 256,
+  });
+
+  /// Lists all child records, including suspended and completed children.
+  Future<List<WorkflowConcurrentStepRecord>> listConcurrentSteps(String runId);
+
+  /// Releases an execution after its script and admitted work have settled.
+  ///
+  /// When [suspended] is true, failed checkpoints do not make the run runnable:
+  /// the script's observed outcome was suspension, not an escaping failure.
+  /// Failed records remain available for diagnostics and subsequent replay.
+  /// Ready or still-running children still keep the parent runnable.
+  ///
+  /// Otherwise an active run remains runnable for retry/recovery. Terminal
+  /// outcomes are preserved. The execution token must match, and outcome
+  /// projection and lease release must be one atomic mutation. A subsequent
+  /// ordinary [FencedWorkflowStore.releaseRunExecution] must be a no-op.
+  Future<void> releaseConcurrentExecution(
+    String runId, {
+    required String executionId,
+    required bool suspended,
+  });
+
+  /// Clears child records during explicit rewind/cleanup.
+  Future<void> clearConcurrentSteps(String runId);
 }
 
 /// Optional atomic completion/cancellation capability.

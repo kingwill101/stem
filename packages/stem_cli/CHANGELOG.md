@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Require Stem `>=0.6.0 <1.0.0` and Redis, PostgreSQL, and SQLite adapters
+  `>=0.4.0 <1.0.0`, aligning CLI workflow operations with the concurrent
+  checkpoint storage and compatibility APIs.
+- No new commands or command-line flags are introduced in this release.
+
 ## 0.3.0
 
 - Require Dart `>=3.13.0 <4.0.0`.

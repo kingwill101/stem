@@ -1363,6 +1363,11 @@ class _FakeWorkflowScriptContext implements WorkflowScriptContext {
   String get workflow => 'demo.workflow';
 
   @override
+  Future<Map<String, T>> parallel<T>(
+    Map<String, Future<T> Function(WorkflowScriptContext)> branches,
+  ) => Future.error(UnimplementedError());
+
+  @override
   Future<T> step<T>(
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {

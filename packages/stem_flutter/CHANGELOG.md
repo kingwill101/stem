@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- Require Stem `>=0.6.0 <1.0.0`, aligning Flutter-owned workflow runtimes with
+  the durable concurrent-checkpoint release.
+- Flutter lifecycle ownership, observation, and background-execution boundaries
+  are unchanged.
+
 ## 0.4.0
 
 - Ship a package skill for workflow host ownership and Flutter lifecycle handling.
